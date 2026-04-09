@@ -6,17 +6,18 @@ import {
   Clock,
   MapPin,
   MessageCircle,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { GenderPreference } from "../backend";
 import { Layout } from "../components/Layout";
 import { SectionLoader } from "../components/LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
 import {
   RequestStatus,
+  getCurrentUserId,
   useApproveJoinRequest,
   useMyRequestStatus,
   useMyRideRequests,
@@ -108,7 +109,14 @@ export default function RideDetailPage() {
 
   const rideIdBigInt = rideId ? BigInt(rideId) : null;
   const { data: ride, isLoading } = useRideDetails(rideIdBigInt);
-  const isCreator = ride?.creator_id === userId;
+  const currentUserId = getCurrentUserId();
+  // isCreator: primary check is localStorage email (currentUserId), fallback to auth userId
+  // This must NEVER be false for rides the user created
+  const isCreator = Boolean(
+    ride &&
+      (ride.creator_id === currentUserId ||
+        (userId && ride.creator_id === userId)),
+  );
   const { data: requestStatus } = useMyRequestStatus(
     !isCreator ? rideIdBigInt : null,
   );
@@ -116,14 +124,48 @@ export default function RideDetailPage() {
     isCreator ? rideIdBigInt : null,
   );
 
+  // Joined ride status: derive from ride data first, then fall back to requestStatus hook
+  // confirmed_users has user → accepted; pending_requests has user → pending; else use hook
+  const joinedStatus: string = (() => {
+    if (!ride || isCreator) return RequestStatus.not_requested;
+    const uid = currentUserId;
+    const uid2 = userId ?? "";
+    if (
+      ride.confirmed_users.includes(uid) ||
+      ride.confirmed_users.includes(uid2)
+    )
+      return RequestStatus.accepted;
+    if (
+      ride.pending_requests.includes(uid) ||
+      ride.pending_requests.includes(uid2)
+    )
+      return RequestStatus.pending;
+    if (requestStatus && requestStatus !== RequestStatus.not_requested)
+      return requestStatus;
+    // If user is in joined_users but no explicit status, treat as accepted
+    if (ride.joined_users.includes(uid) || ride.joined_users.includes(uid2))
+      return RequestStatus.accepted;
+    return RequestStatus.pending;
+  })();
+
   const seatsLeft = ride
     ? Number(ride.seats_total) - Number(ride.seats_filled)
     : 0;
   const perPerson = ride
     ? Math.ceil(Number(ride.total_fare) / Number(ride.seats_total))
     : 0;
-  const hasJoined = ride?.joined_users.includes(userId ?? "") ?? false;
+  // hasJoined: check both auth userId and localStorage email (currentUserId)
+  const hasJoined =
+    (ride?.joined_users.includes(userId ?? "") ||
+      ride?.joined_users.includes(currentUserId)) ??
+    false;
   const isFull = seatsLeft === 0;
+
+  // Female-only ride gate: check gender from localStorage
+  const storedGender = localStorage.getItem("vit_user_gender");
+  const isFemaleUser = storedGender === "female";
+  const isFemaleOnlyRide = ride?.female_only === true;
+  const blockedByGender = isFemaleOnlyRide && !isFemaleUser;
 
   const dateStr = ride
     ? new Date(Number(ride.datetime) / 1_000_000).toLocaleString("en-IN", {
@@ -211,12 +253,50 @@ export default function RideDetailPage() {
         </div>
       ) : (
         <div className="px-4 py-4 flex flex-col gap-4">
+          {/* Joined ride status banner — shown to non-creator only, prominently at top */}
+          {!isCreator && joinedStatus !== RequestStatus.not_requested && (
+            <div
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border font-semibold text-sm ${
+                joinedStatus === RequestStatus.accepted
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : joinedStatus === RequestStatus.rejected
+                    ? "bg-destructive/5 border-destructive/20 text-destructive"
+                    : "bg-amber-50 border-amber-200 text-amber-800"
+              }`}
+              data-ocid="joined-ride-status-banner"
+            >
+              <span className="text-base flex-shrink-0">
+                {joinedStatus === RequestStatus.accepted
+                  ? "🟢"
+                  : joinedStatus === RequestStatus.rejected
+                    ? "🔴"
+                    : "🟡"}
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold">
+                  {joinedStatus === RequestStatus.accepted
+                    ? "Accepted"
+                    : joinedStatus === RequestStatus.rejected
+                      ? "Rejected"
+                      : "Pending Approval"}
+                </span>
+                <span className="text-xs font-normal opacity-80">
+                  {joinedStatus === RequestStatus.accepted
+                    ? "You're confirmed for this ride"
+                    : joinedStatus === RequestStatus.rejected
+                      ? "Your request was not approved"
+                      : "Waiting for creator to approve your request"}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Route card */}
           <div className="bg-card rounded-2xl border border-border p-5 flex flex-col gap-4">
-            {ride.creator_gender === GenderPreference.female && (
+            {isFemaleOnlyRide && (
               <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
-                  🚺 Female-Only Ride
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-pink-100 text-pink-700 border border-pink-200">
+                  👩 Female Only Ride
                 </span>
               </div>
             )}
@@ -311,19 +391,34 @@ export default function RideDetailPage() {
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
                   <span className="text-sm font-semibold text-foreground">
-                    Pending Requests
+                    Join Requests
                   </span>
                 </div>
-                {pendingRequests.length > 0 && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {pendingRequests.length > 0 ? (
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                     {pendingRequests.length} pending
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    0 pending
                   </span>
                 )}
               </div>
               {pendingRequests.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  No pending requests
-                </p>
+                <div
+                  className="flex flex-col items-center gap-2 py-5 text-center"
+                  data-ocid="empty-pending-requests"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center text-2xl">
+                    🙌
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    No pending requests yet
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    When students request to join, they'll appear here
+                  </p>
+                </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {pendingRequests.map((req) => {
@@ -340,11 +435,11 @@ export default function RideDetailPage() {
                     return (
                       <div
                         key={req.id.toString()}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border"
+                        className="flex items-start gap-3 p-3 rounded-xl bg-muted/40 border border-border"
                         data-ocid="request-card"
                       >
-                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="text-primary text-xs font-bold">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-primary text-sm font-bold">
                             {initials}
                           </span>
                         </div>
@@ -353,39 +448,54 @@ export default function RideDetailPage() {
                             {req.requester_name ||
                               `${req.requester_id.slice(0, 12)}…`}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            Requested to join
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleApprove(req.requester_id)}
-                            disabled={isApprovingThis || isRejectingThis}
-                            aria-label="Approve request"
-                            data-ocid="btn-approve-request"
-                            className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                          >
-                            {isApprovingThis ? (
-                              <span className="w-3.5 h-3.5 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleReject(req.requester_id)}
-                            disabled={isApprovingThis || isRejectingThis}
-                            aria-label="Reject request"
-                            data-ocid="btn-reject-request"
-                            className="w-8 h-8 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                          >
-                            {isRejectingThis ? (
-                              <span className="w-3.5 h-3.5 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin" />
-                            ) : (
-                              <X className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {req.requester_email ? (
+                            <div className="flex items-center gap-1.5 mt-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <p className="text-xs text-emerald-800 font-medium truncate">
+                                {req.requester_email}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              VIT Student
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(req.requester_id)}
+                              disabled={isApprovingThis || isRejectingThis}
+                              aria-label="Approve request"
+                              data-ocid="btn-approve-request"
+                              className="flex-1 h-8 rounded-lg bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                            >
+                              {isApprovingThis ? (
+                                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  Accept
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(req.requester_id)}
+                              disabled={isApprovingThis || isRejectingThis}
+                              aria-label="Reject request"
+                              data-ocid="btn-reject-request"
+                              className="flex-1 h-8 rounded-lg border border-destructive/40 text-destructive text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                            >
+                              {isRejectingThis ? (
+                                <span className="w-3.5 h-3.5 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <X className="w-3.5 h-3.5" />
+                                  Reject
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -436,56 +546,113 @@ export default function RideDetailPage() {
 
           {/* Actions */}
           <div className="flex flex-col gap-3 pb-2">
-            {/* Non-creator join/request status controls */}
-            {!isCreator &&
-              !hasJoined &&
-              (requestStatus === RequestStatus.not_requested ||
-              requestStatus === undefined ? (
-                isFull ? (
-                  <div className="w-full h-12 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center justify-center">
-                    <span className="text-destructive text-sm font-semibold">
-                      Ride is Full
-                    </span>
-                  </div>
-                ) : (
-                  <Button
-                    className="w-full h-12 rounded-xl font-semibold text-base"
-                    onClick={() => {
-                      if (!isAuthenticated) {
-                        navigate({ to: "/login" });
-                        return;
-                      }
-                      setShowModal(true);
-                    }}
-                    data-ocid="btn-join-ride"
-                  >
-                    Join Ride
-                  </Button>
-                )
-              ) : requestStatus === RequestStatus.pending ? (
-                <div
-                  className="w-full h-12 rounded-xl border flex items-center justify-center gap-2 bg-amber-50 border-amber-200"
-                  data-ocid="status-pending"
-                >
-                  <span className="text-sm">🟡</span>
-                  <span className="text-sm font-semibold text-amber-700">
-                    Pending Approval
-                  </span>
-                </div>
-              ) : requestStatus === RequestStatus.rejected ? (
-                <div
-                  className="w-full h-12 rounded-xl border flex items-center justify-center gap-2 bg-destructive/5 border-destructive/20"
-                  data-ocid="status-rejected"
-                >
-                  <span className="text-sm">🔴</span>
-                  <span className="text-sm font-semibold text-destructive">
-                    Request Declined
-                  </span>
-                </div>
-              ) : null)}
+            {/* NON-CREATOR ONLY: join / request status controls */}
+            {!isCreator && (
+              <>
+                {!hasJoined &&
+                  (blockedByGender ? (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        className="w-full h-12 rounded-xl font-semibold text-base opacity-50"
+                        disabled
+                        data-ocid="btn-join-ride-blocked"
+                      >
+                        Join Ride
+                      </Button>
+                      <p
+                        className="text-center text-sm text-pink-600 font-medium"
+                        data-ocid="msg-female-only-blocked"
+                      >
+                        🚫 This ride is for female students only
+                      </p>
+                    </div>
+                  ) : joinedStatus === RequestStatus.not_requested ||
+                    joinedStatus === undefined ? (
+                    isFull ? (
+                      <div className="w-full h-12 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center justify-center">
+                        <span className="text-destructive text-sm font-semibold">
+                          Ride is Full
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full h-12 rounded-xl font-semibold text-base"
+                        onClick={() => {
+                          if (!isAuthenticated) {
+                            navigate({ to: "/login" });
+                            return;
+                          }
+                          setShowModal(true);
+                        }}
+                        data-ocid="btn-join-ride"
+                      >
+                        Join Ride
+                      </Button>
+                    )
+                  ) : joinedStatus === RequestStatus.pending ? (
+                    <div
+                      className="w-full h-12 rounded-xl border flex items-center justify-center gap-2 bg-amber-50 border-amber-200"
+                      data-ocid="status-pending"
+                    >
+                      <span className="text-sm">🟡</span>
+                      <span className="text-sm font-semibold text-amber-700">
+                        Pending Approval
+                      </span>
+                    </div>
+                  ) : joinedStatus === RequestStatus.rejected ? (
+                    <div
+                      className="w-full h-12 rounded-xl border flex items-center justify-center gap-2 bg-destructive/5 border-destructive/20"
+                      data-ocid="status-rejected"
+                    >
+                      <span className="text-sm">🔴</span>
+                      <span className="text-sm font-semibold text-destructive">
+                        Request Declined
+                      </span>
+                    </div>
+                  ) : null)}
 
-            {/* Chat — accessible to joined members and creator */}
-            {(hasJoined || isCreator) && (
+                {/* Chat for joined non-creator members */}
+                {hasJoined && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 rounded-xl font-semibold"
+                    onClick={() =>
+                      navigate({
+                        to: "/chat/$rideId",
+                        params: { rideId: rideId },
+                      })
+                    }
+                    data-ocid="btn-open-chat"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Open Group Chat
+                  </Button>
+                )}
+
+                {/* Withdraw for joined non-creator members */}
+                {hasJoined && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 rounded-xl font-semibold border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive"
+                    onClick={handleWithdraw}
+                    disabled={withdrawRide.isPending}
+                    data-ocid="btn-withdraw-ride"
+                  >
+                    {withdrawRide.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin" />
+                        Withdrawing...
+                      </span>
+                    ) : (
+                      "Withdraw from Ride"
+                    )}
+                  </Button>
+                )}
+              </>
+            )}
+
+            {/* CREATOR ONLY: group chat access */}
+            {isCreator && (
               <Button
                 variant="outline"
                 className="w-full h-12 rounded-xl font-semibold"
@@ -499,26 +666,6 @@ export default function RideDetailPage() {
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Open Group Chat
-              </Button>
-            )}
-
-            {/* Withdraw — only for joined non-creator users */}
-            {hasJoined && !isCreator && (
-              <Button
-                variant="outline"
-                className="w-full h-12 rounded-xl font-semibold border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive"
-                onClick={handleWithdraw}
-                disabled={withdrawRide.isPending}
-                data-ocid="btn-withdraw-ride"
-              >
-                {withdrawRide.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin" />
-                    Withdrawing...
-                  </span>
-                ) : (
-                  "Withdraw from Ride"
-                )}
               </Button>
             )}
           </div>

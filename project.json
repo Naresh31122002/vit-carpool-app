@@ -1,22 +1,25 @@
 {
-  "overview": "A mobile-first carpool app for VIT students to share cab rides to Chennai Airport, Railway Station, and other destinations. Features gender-based ride filters, group chat for joined rides, profile photos, and ride withdrawal.",
+  "overview": "A mobile-first carpool app exclusively for VIT students to share rides to Chennai Airport and Railway Station. Features email/password auth with VIT domain restriction, gender-based ride filtering, female-only ride posting, a join request/approval system, group chat, and a clean premium UI.",
   "features": [
-    "VIT student email (@vitstudent.ac.in) only signup and sign-in",
-    "Gender-based ride filters — female-only mode shows and restricts rides to female users",
-    "Profile photo upload displayed on profile page",
-    "Ride withdrawal that frees up seats and removes user from group chat",
-    "Per-ride group chat accessible only to joined members",
-    "Seat availability tracking with overbooking prevention",
-    "Mobile-first premium UI with blue and teal accents"
+    "Email/password signup and login with @vitstudent.ac.in restriction",
+    "Gender selection at signup (Male/Female/LGBTQ+)",
+    "Forgot password with in-app OTP flow",
+    "Female-only ride toggle for female users",
+    "Female Only badge on restricted rides",
+    "Join request and approval system",
+    "Group chat for joined rides only",
+    "My Rides split into Posted and Joined tabs",
+    "Ride withdrawal that frees seats and removes from chat"
   ],
-  "category": "productivity",
+  "category": "transportation",
   "tags": [
     "carpool",
     "vit",
     "students",
-    "rides",
-    "chat",
-    "mobile"
+    "ride-sharing",
+    "mobile",
+    "gender-filter",
+    "authentication"
   ],
-  "last_updated": "2026-04-08T12:11:21.074Z"
+  "last_updated": "2026-04-09T08:31:16.429Z"
 }

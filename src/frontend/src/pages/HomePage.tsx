@@ -10,12 +10,83 @@ import { Layout } from "../components/Layout";
 import { useAuth } from "../hooks/useAuth";
 import {
   RequestStatus,
+  getLocalPreferredDestination,
   useGenderFilteredRides,
   useMyPendingRequestsCount,
   useMyRequestStatus,
   useProfile,
   useRides,
 } from "../hooks/useQueries";
+
+// ---- Mock rides from other VIT students ----
+const now = Date.now();
+
+const MOCK_OTHER_RIDES: RidePublic[] = [
+  {
+    id: 9001n,
+    destination: "Chennai Airport",
+    creator_id: "mock_priya_s",
+    creator_gender: GenderPreference.female,
+    datetime: BigInt((now + 3 * 60 * 60 * 1000) * 1_000_000),
+    total_fare: 800n,
+    seats_total: 4n,
+    seats_filled: 2n,
+    female_only: false,
+    joined_users: [],
+    pending_requests: [],
+    confirmed_users: [],
+  },
+  {
+    id: 9002n,
+    destination: "Chennai Central Railway",
+    creator_id: "mock_arjun_k",
+    creator_gender: GenderPreference.male,
+    datetime: BigInt((now + 5 * 60 * 60 * 1000) * 1_000_000),
+    total_fare: 600n,
+    seats_total: 3n,
+    seats_filled: 1n,
+    female_only: false,
+    joined_users: [],
+    pending_requests: [],
+    confirmed_users: [],
+  },
+  {
+    id: 9003n,
+    destination: "Vellore Bus Stand",
+    creator_id: "mock_sneha_r",
+    creator_gender: GenderPreference.female,
+    datetime: BigInt((now + 2 * 60 * 60 * 1000) * 1_000_000),
+    total_fare: 200n,
+    seats_total: 4n,
+    seats_filled: 1n,
+    female_only: true,
+    joined_users: [],
+    pending_requests: [],
+    confirmed_users: [],
+  },
+  {
+    id: 9004n,
+    destination: "Chennai Egmore",
+    creator_id: "mock_rahul_v",
+    creator_gender: GenderPreference.male,
+    datetime: BigInt((now + 8 * 60 * 60 * 1000) * 1_000_000),
+    total_fare: 700n,
+    seats_total: 4n,
+    seats_filled: 3n,
+    female_only: false,
+    joined_users: [],
+    pending_requests: [],
+    confirmed_users: [],
+  },
+];
+
+// Mock creator display names keyed by creator_id
+const MOCK_CREATOR_NAMES: Record<string, string> = {
+  mock_priya_s: "Priya S.",
+  mock_arjun_k: "Arjun K.",
+  mock_sneha_r: "Sneha R.",
+  mock_rahul_v: "Rahul V.",
+};
 
 function getRideBadge(ride: RidePublic): "full" | "urgent" | null {
   const seatsLeft = Number(ride.seats_total) - Number(ride.seats_filled);
@@ -51,7 +122,7 @@ function RideCardSkeleton() {
 }
 
 function RequestStatusBadge({ rideId }: { rideId: bigint }) {
-  const { data: status } = useMyRequestStatus(rideId);
+  const { data: status } = useMyRequestStatus(rideId > 9000n ? null : rideId);
   if (!status || status === RequestStatus.not_requested) return null;
   if (status === RequestStatus.pending) {
     return (
@@ -91,6 +162,7 @@ interface RideCardProps {
   isCheapest?: boolean;
   isFemaleOnly?: boolean;
   isOwn?: boolean;
+  isMock?: boolean;
   onClick: () => void;
 }
 
@@ -99,6 +171,7 @@ function RideCard({
   isCheapest,
   isFemaleOnly,
   isOwn,
+  isMock,
   onClick,
 }: RideCardProps) {
   const seatsLeft = Number(ride.seats_total) - Number(ride.seats_filled);
@@ -111,6 +184,10 @@ function RideCard({
     "en-IN",
     { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
   );
+
+  const creatorName = isMock
+    ? (MOCK_CREATOR_NAMES[ride.creator_id] ?? "VIT Student")
+    : ride.creator_id.slice(0, 8);
 
   return (
     <button
@@ -125,8 +202,11 @@ function RideCard({
             Origin
           </span>
           {isFemaleOnly && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
-              🚺 Female Only
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 border border-pink-200"
+              data-ocid="badge-female-only"
+            >
+              👩 Female Only
             </span>
           )}
         </div>
@@ -188,12 +268,12 @@ function RideCard({
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
             <span className="text-primary text-xs font-bold">
-              {ride.creator_id.slice(0, 2).toUpperCase()}
+              {creatorName.slice(0, 2).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground truncate">
-              {isOwn ? "Your Ride" : "Driver"}
+              {isOwn ? "Your Ride" : creatorName}
             </p>
             <p className="text-[10px] text-muted-foreground">
               Ride · {dateStr}
@@ -201,7 +281,7 @@ function RideCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {!isOwn && <RequestStatusBadge rideId={ride.id} />}
+          {!isOwn && !isMock && <RequestStatusBadge rideId={ride.id} />}
           {seatsLeft > 0 && !isOwn && (
             <div className="bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl flex-shrink-0">
               Join Ride
@@ -227,7 +307,7 @@ export default function HomePage() {
   const { data: femaleRides, isLoading: femaleLoading } =
     useGenderFilteredRides(isFemaleUser ? GenderPreference.female : null);
 
-  const rides = isFemaleUser ? femaleRides : allRides;
+  const backendRides = isFemaleUser ? femaleRides : allRides;
   const isLoading = isFemaleUser ? femaleLoading : allLoading;
 
   useEffect(() => {
@@ -236,19 +316,43 @@ export default function HomePage() {
     }
   }, [isAuthenticated, isInitializing, navigate]);
 
-  const filteredRides = (rides ?? []).filter(
-    (r) =>
-      search === "" ||
-      r.destination.toLowerCase().includes(search.toLowerCase()),
+  // Show backend rides from other users; if empty, fill with mock rides
+  const otherUserBackendRides = (backendRides ?? []).filter(
+    (r) => r.creator_id !== userId,
   );
 
-  const availableRides = filteredRides.filter(
-    (r) => Number(r.seats_total) > Number(r.seats_filled),
+  // Merge: if backend has rides from others, show those; else show mocks
+  const feedRides: Array<{ ride: RidePublic; isMock: boolean }> =
+    otherUserBackendRides.length > 0
+      ? otherUserBackendRides.map((r) => ({ ride: r, isMock: false }))
+      : MOCK_OTHER_RIDES.filter((r) => !isFemaleUser || r.female_only).map(
+          (r) => ({ ride: r, isMock: true }),
+        );
+
+  const filteredFeed = feedRides.filter(
+    ({ ride }) =>
+      search === "" ||
+      ride.destination.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const availableRides = filteredFeed.filter(
+    ({ ride }) => Number(ride.seats_total) > Number(ride.seats_filled),
   );
   const cheapestFare =
     availableRides.length > 0
-      ? Math.min(...availableRides.map((r) => Number(r.total_fare)))
+      ? Math.min(...availableRides.map(({ ride }) => Number(ride.total_fare)))
       : null;
+
+  // Notification badge = pending requests + destination match rides
+  const preferredDest = getLocalPreferredDestination();
+  const destMatchCount = preferredDest
+    ? feedRides.filter(
+        ({ ride }) =>
+          ride.destination.toLowerCase() === preferredDest.toLowerCase() &&
+          Number(ride.seats_total) > Number(ride.seats_filled),
+      ).length
+    : 0;
+  const totalBadge = (pendingCount ? Number(pendingCount) : 0) + destMatchCount;
 
   const header = (
     <div className="flex items-center justify-between px-4 py-3">
@@ -274,9 +378,9 @@ export default function HomePage() {
           onClick={() => navigate({ to: "/requests" })}
         >
           <Bell className="w-4 h-4 text-muted-foreground" />
-          {pendingCount !== undefined && Number(pendingCount) > 0 && (
+          {totalBadge > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground flex items-center justify-center leading-none">
-              {Number(pendingCount) > 99 ? "99+" : Number(pendingCount)}
+              {totalBadge > 99 ? "99+" : totalBadge}
             </span>
           )}
         </button>
@@ -307,7 +411,7 @@ export default function HomePage() {
               <RideCardSkeleton />
               <RideCardSkeleton />
             </>
-          ) : filteredRides.length === 0 ? (
+          ) : filteredFeed.length === 0 ? (
             <div
               className="flex flex-col items-center gap-3 py-16 text-center"
               data-ocid="empty-rides"
@@ -336,23 +440,25 @@ export default function HomePage() {
               </Button>
             </div>
           ) : (
-            filteredRides.map((ride) => (
+            filteredFeed.map(({ ride, isMock }) => (
               <RideCard
                 key={ride.id.toString()}
                 ride={ride}
-                isFemaleOnly={ride.creator_gender === GenderPreference.female}
-                isOwn={ride.creator_id === userId}
+                isMock={isMock}
+                isFemaleOnly={ride.female_only === true}
+                isOwn={!isMock && ride.creator_id === userId}
                 isCheapest={
                   cheapestFare !== null &&
                   Number(ride.total_fare) === cheapestFare &&
                   Number(ride.seats_total) > Number(ride.seats_filled)
                 }
-                onClick={() =>
+                onClick={() => {
+                  if (isMock) return; // Mock rides aren't navigable
                   navigate({
                     to: "/ride/$rideId",
                     params: { rideId: ride.id.toString() },
-                  })
-                }
+                  });
+                }}
               />
             ))
           )}

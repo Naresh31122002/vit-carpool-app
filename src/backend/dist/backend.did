@@ -11,8 +11,14 @@ type UserProfilePublic =
    hasPhoto: bool;
    id: text;
    name: text;
+   preferred_destination: opt text;
  };
 type Timestamp = int;
+type SignUpResult = 
+ variant {
+   err: text;
+   ok: text;
+ };
 type SaveMessageResult = 
  variant {
    notMember;
@@ -21,12 +27,15 @@ type SaveMessageResult =
  };
 type RidePublic = 
  record {
+   confirmed_users: vec text;
    creator_gender: GenderPreference;
    creator_id: text;
    datetime: Timestamp;
    destination: text;
+   female_only: bool;
    id: RideId;
    joined_users: vec text;
+   pending_requests: vec text;
    seats_filled: nat;
    seats_total: nat;
    total_fare: nat;
@@ -38,9 +47,16 @@ type JoinResult =
    err: text;
    ok: RidePublic;
  };
+type JoinRequestStatus = 
+ variant {
+   accepted;
+   pending;
+   rejected;
+ };
 type GenderPreference = 
  variant {
    female;
+   lgbtq;
    male;
    none;
  };
@@ -57,13 +73,39 @@ type ChatMessagePublic =
    sender_id: text;
    timestamp: Timestamp;
  };
+type AuthResult = 
+ variant {
+   err: text;
+   ok: record {
+         gender: GenderPreference;
+         userId: text;
+       };
+ };
 service : {
+  approveJoinRequest: (ride_id: RideId, requester_id: text) ->
+   (variant {
+      err: text;
+      ok: RidePublic;
+    });
   createRide: (destination: text, datetime: Timestamp, total_fare: nat,
-   seats_total: nat) -> (CreateRideResult);
+   seats_total: nat, female_only: bool) -> (CreateRideResult);
+  forgotPassword: (email: text) -> (SignUpResult);
+  getAcceptedRequestNotifications: () ->
+   (vec record {
+          requester_id: text;
+          ride_destination: text;
+          ride_id: RideId;
+        }) query;
+  getDestinationMatchNotifications: () -> (nat) query;
   getGenderFilteredRides: (gender: opt GenderPreference) ->
    (vec RidePublic) query;
   getJoinedRides: () -> (vec RidePublic) query;
   getMessages: (ride_id: RideId) -> (vec ChatMessagePublic) query;
+  getMyRequests: () ->
+   (vec record {
+          ride_id: RideId;
+          status: JoinRequestStatus;
+        }) query;
   getMyRides: () -> (vec RidePublic) query;
   getPostedRides: () -> (vec RidePublic) query;
   getProfile: () -> (opt UserProfilePublic) query;
@@ -73,11 +115,32 @@ service : {
           mime: text;
         }) query;
   getRideDetails: (ride_id: RideId) -> (opt RidePublic) query;
+  getRideRequests: (ride_id: RideId) ->
+   (variant {
+      err: text;
+      ok: vec UserProfilePublic;
+    });
   getRides: () -> (vec RidePublic) query;
   joinRide: (ride_id: RideId) -> (JoinResult);
+  login: (email: text, passwordHash: text) -> (AuthResult);
+  rejectJoinRequest: (ride_id: RideId, requester_id: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  resetPassword: (email: text, otp: text, newPasswordHash: text) ->
+   (SignUpResult);
   saveMessage: (ride_id: RideId, content: text) -> (SaveMessageResult);
-  setProfile: (name: text, email: text, gender: GenderPreference) ->
-   (UserProfilePublic);
+  sendJoinRequest: (ride_id: RideId) -> (variant {
+                                           err: text;
+                                           ok;
+                                         });
+  sendSignupOTP: (email: text) -> (SignUpResult);
+  setProfile: (name: text, email: text, gender: GenderPreference,
+   preferred_destination: opt text) -> (UserProfilePublic);
   setProfilePhoto: (data: vec nat8, mime: text) -> ();
+  signUp: (email: text, passwordHash: text, gender: GenderPreference) ->
+   (SignUpResult);
+  verifyOTP: (email: text, otp: text) -> (bool) query;
   withdrawRide: (ride_id: RideId) -> (WithdrawResult);
 }

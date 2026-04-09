@@ -3,12 +3,14 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
 } from "@tanstack/react-router";
 import { Suspense, lazy } from "react";
 import { PageLoader } from "./components/LoadingSpinner";
 
 // Lazy-loaded pages for code splitting
 const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CreateRidePage = lazy(() => import("./pages/CreateRidePage"));
 const RideDetailPage = lazy(() => import("./pages/RideDetailPage"));
@@ -16,6 +18,10 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const MyRidesPage = lazy(() => import("./pages/MyRidesPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const RequestsPage = lazy(() => import("./pages/RequestsPage"));
+
+function isLoggedIn(): boolean {
+  return !!localStorage.getItem("vit_session_token");
+}
 
 const rootRoute = createRootRoute();
 
@@ -29,9 +35,22 @@ const loginRoute = createRoute({
   ),
 });
 
+const signupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signup",
+  component: () => (
+    <Suspense fallback={<PageLoader />}>
+      <SignupPage />
+    </Suspense>
+  ),
+});
+
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <HomePage />
@@ -42,6 +61,9 @@ const homeRoute = createRoute({
 const createRideRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/create",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <CreateRidePage />
@@ -52,6 +74,9 @@ const createRideRoute = createRoute({
 const rideDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/ride/$rideId",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <RideDetailPage />
@@ -62,6 +87,9 @@ const rideDetailRoute = createRoute({
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <ChatPage />
@@ -72,6 +100,9 @@ const chatRoute = createRoute({
 const chatRideRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat/$rideId",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <ChatPage />
@@ -82,6 +113,9 @@ const chatRideRoute = createRoute({
 const myRidesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/my-rides",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <MyRidesPage />
@@ -92,6 +126,9 @@ const myRidesRoute = createRoute({
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/profile",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <ProfilePage />
@@ -102,6 +139,9 @@ const profileRoute = createRoute({
 const requestsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/requests",
+  beforeLoad: () => {
+    if (!isLoggedIn()) throw redirect({ to: "/login" });
+  },
   component: () => (
     <Suspense fallback={<PageLoader />}>
       <RequestsPage />
@@ -111,6 +151,7 @@ const requestsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  signupRoute,
   homeRoute,
   createRideRoute,
   rideDetailRoute,

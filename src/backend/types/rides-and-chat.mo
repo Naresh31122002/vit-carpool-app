@@ -6,11 +6,12 @@ module {
   public type RideId = Common.RideId;
   public type MessageId = Common.MessageId;
 
-  // Gender preference variant
+  // Gender preference variant — includes lgbtq
   public type GenderPreference = {
     #none;
     #female;
     #male;
+    #lgbtq;
   };
 
   // Internal ride record (mutable fields for seats_filled)
@@ -24,6 +25,9 @@ module {
     seats_total : Nat;
     var seats_filled : Nat;
     var joined_users : [UserId];
+    female_only : Bool; // if true, only female users can join
+    var pending_requests : [UserId];
+    var confirmed_users : [UserId];
   };
 
   // Public (shared) ride record — no mutable fields
@@ -37,6 +41,9 @@ module {
     seats_total : Nat;
     seats_filled : Nat;
     joined_users : [Text]; // Principals as Text
+    female_only : Bool;
+    pending_requests : [Text];
+    confirmed_users : [Text];
   };
 
   // User profile (internal)
@@ -47,6 +54,7 @@ module {
     var gender : GenderPreference;
     var photoData : ?[Nat8];
     var photoMime : ?Text;
+    var preferred_destination : ?Text;
   };
 
   // Public user profile — no mutable fields
@@ -56,6 +64,7 @@ module {
     email : Text;
     gender : GenderPreference;
     hasPhoto : Bool;
+    preferred_destination : ?Text;
   };
 
   // Chat message
@@ -73,6 +82,43 @@ module {
     ride_id : RideId;
     sender_id : Text;
     content : Text;
+    timestamp : Timestamp;
+  };
+
+  // Auth user — email/password credentials linked to a principal
+  public type AuthUser = {
+    email : Text;
+    var passwordHash : Text;
+    var gender : GenderPreference;
+    createdAt : Timestamp;
+  };
+
+  // OTP record for forgot password flow
+  public type OTPRecord = {
+    otp : Text;
+    expiresAt : Timestamp;
+    email : Text;
+  };
+
+  // Join request record
+  public type JoinRequest = {
+    ride_id : RideId;
+    requester_id : UserId;
+    status : JoinRequestStatus;
+    timestamp : Timestamp;
+  };
+
+  public type JoinRequestStatus = {
+    #pending;
+    #accepted;
+    #rejected;
+  };
+
+  // Public join request
+  public type JoinRequestPublic = {
+    ride_id : RideId;
+    requester_id : Text;
+    status : JoinRequestStatus;
     timestamp : Timestamp;
   };
 
@@ -97,5 +143,16 @@ module {
     #ok : ChatMessagePublic;
     #rideNotFound;
     #notMember;
+  };
+
+  // Auth result types
+  public type AuthResult = {
+    #ok : { userId : Text; gender : GenderPreference };
+    #err : Text;
+  };
+
+  public type SignUpResult = {
+    #ok : Text;
+    #err : Text;
   };
 };

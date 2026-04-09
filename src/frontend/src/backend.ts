@@ -90,6 +90,29 @@ export class ExternalBlob {
     }
 }
 export type Timestamp = bigint;
+export type CreateRideResult = {
+    __kind__: "ok";
+    ok: RidePublic;
+} | {
+    __kind__: "err";
+    err: string;
+};
+export type RideId = bigint;
+export interface UserProfilePublic {
+    id: string;
+    name: string;
+    hasPhoto: boolean;
+    email: string;
+    gender: GenderPreference;
+    preferred_destination?: string;
+}
+export type SignUpResult = {
+    __kind__: "ok";
+    ok: string;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface RidePublic {
     id: RideId;
     joined_users: Array<string>;
@@ -99,15 +122,11 @@ export interface RidePublic {
     seats_total: bigint;
     total_fare: bigint;
     seats_filled: bigint;
+    pending_requests: Array<string>;
+    female_only: boolean;
     datetime: Timestamp;
+    confirmed_users: Array<string>;
 }
-export type CreateRideResult = {
-    __kind__: "ok";
-    ok: RidePublic;
-} | {
-    __kind__: "err";
-    err: string;
-};
 export type MessageId = bigint;
 export type JoinResult = {
     __kind__: "ok";
@@ -116,7 +135,13 @@ export type JoinResult = {
     __kind__: "err";
     err: string;
 };
-export type RideId = bigint;
+export interface ChatMessagePublic {
+    id: MessageId;
+    content: string;
+    ride_id: RideId;
+    sender_id: string;
+    timestamp: Timestamp;
+}
 export type SaveMessageResult = {
     __kind__: "ok";
     ok: ChatMessagePublic;
@@ -127,24 +152,26 @@ export type SaveMessageResult = {
     __kind__: "rideNotFound";
     rideNotFound: null;
 };
-export interface ChatMessagePublic {
-    id: MessageId;
-    content: string;
-    ride_id: RideId;
-    sender_id: string;
-    timestamp: Timestamp;
-}
-export interface UserProfilePublic {
-    id: string;
-    name: string;
-    hasPhoto: boolean;
-    email: string;
-    gender: GenderPreference;
-}
+export type AuthResult = {
+    __kind__: "ok";
+    ok: {
+        userId: string;
+        gender: GenderPreference;
+    };
+} | {
+    __kind__: "err";
+    err: string;
+};
 export enum GenderPreference {
     female = "female",
     male = "male",
-    none = "none"
+    none = "none",
+    lgbtq = "lgbtq"
+}
+export enum JoinRequestStatus {
+    pending = "pending",
+    rejected = "rejected",
+    accepted = "accepted"
 }
 export enum WithdrawResult {
     ok = "ok",
@@ -152,10 +179,28 @@ export enum WithdrawResult {
     rideNotFound = "rideNotFound"
 }
 export interface backendInterface {
-    createRide(destination: string, datetime: Timestamp, total_fare: bigint, seats_total: bigint): Promise<CreateRideResult>;
+    approveJoinRequest(ride_id: RideId, requester_id: string): Promise<{
+        __kind__: "ok";
+        ok: RidePublic;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    createRide(destination: string, datetime: Timestamp, total_fare: bigint, seats_total: bigint, female_only: boolean): Promise<CreateRideResult>;
+    forgotPassword(email: string): Promise<SignUpResult>;
+    getAcceptedRequestNotifications(): Promise<Array<{
+        ride_id: RideId;
+        requester_id: string;
+        ride_destination: string;
+    }>>;
+    getDestinationMatchNotifications(): Promise<bigint>;
     getGenderFilteredRides(gender: GenderPreference | null): Promise<Array<RidePublic>>;
     getJoinedRides(): Promise<Array<RidePublic>>;
     getMessages(ride_id: RideId): Promise<Array<ChatMessagePublic>>;
+    getMyRequests(): Promise<Array<{
+        status: JoinRequestStatus;
+        ride_id: RideId;
+    }>>;
     getMyRides(): Promise<Array<RidePublic>>;
     getPostedRides(): Promise<Array<RidePublic>>;
     getProfile(): Promise<UserProfilePublic | null>;
@@ -164,56 +209,148 @@ export interface backendInterface {
         mime: string;
     } | null>;
     getRideDetails(ride_id: RideId): Promise<RidePublic | null>;
+    getRideRequests(ride_id: RideId): Promise<{
+        __kind__: "ok";
+        ok: Array<UserProfilePublic>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getRides(): Promise<Array<RidePublic>>;
     joinRide(ride_id: RideId): Promise<JoinResult>;
+    login(email: string, passwordHash: string): Promise<AuthResult>;
+    rejectJoinRequest(ride_id: RideId, requester_id: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    resetPassword(email: string, otp: string, newPasswordHash: string): Promise<SignUpResult>;
     saveMessage(ride_id: RideId, content: string): Promise<SaveMessageResult>;
-    setProfile(name: string, email: string, gender: GenderPreference): Promise<UserProfilePublic>;
+    sendJoinRequest(ride_id: RideId): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    sendSignupOTP(email: string): Promise<SignUpResult>;
+    setProfile(name: string, email: string, gender: GenderPreference, preferred_destination: string | null): Promise<UserProfilePublic>;
     setProfilePhoto(data: Uint8Array, mime: string): Promise<void>;
+    signUp(email: string, passwordHash: string, gender: GenderPreference): Promise<SignUpResult>;
+    verifyOTP(email: string, otp: string): Promise<boolean>;
     withdrawRide(ride_id: RideId): Promise<WithdrawResult>;
 }
-import type { ChatMessagePublic as _ChatMessagePublic, CreateRideResult as _CreateRideResult, GenderPreference as _GenderPreference, JoinResult as _JoinResult, RideId as _RideId, RidePublic as _RidePublic, SaveMessageResult as _SaveMessageResult, Timestamp as _Timestamp, UserProfilePublic as _UserProfilePublic, WithdrawResult as _WithdrawResult } from "./declarations/backend.did.d.ts";
+import type { AuthResult as _AuthResult, ChatMessagePublic as _ChatMessagePublic, CreateRideResult as _CreateRideResult, GenderPreference as _GenderPreference, JoinRequestStatus as _JoinRequestStatus, JoinResult as _JoinResult, RideId as _RideId, RidePublic as _RidePublic, SaveMessageResult as _SaveMessageResult, SignUpResult as _SignUpResult, Timestamp as _Timestamp, UserProfilePublic as _UserProfilePublic, WithdrawResult as _WithdrawResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async createRide(arg0: string, arg1: Timestamp, arg2: bigint, arg3: bigint): Promise<CreateRideResult> {
+    async approveJoinRequest(arg0: RideId, arg1: string): Promise<{
+        __kind__: "ok";
+        ok: RidePublic;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
         if (this.processError) {
             try {
-                const result = await this.actor.createRide(arg0, arg1, arg2, arg3);
-                return from_candid_CreateRideResult_n1(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.approveJoinRequest(arg0, arg1);
+                return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createRide(arg0, arg1, arg2, arg3);
-            return from_candid_CreateRideResult_n1(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.approveJoinRequest(arg0, arg1);
+            return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async createRide(arg0: string, arg1: Timestamp, arg2: bigint, arg3: bigint, arg4: boolean): Promise<CreateRideResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createRide(arg0, arg1, arg2, arg3, arg4);
+                return from_candid_CreateRideResult_n6(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createRide(arg0, arg1, arg2, arg3, arg4);
+            return from_candid_CreateRideResult_n6(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async forgotPassword(arg0: string): Promise<SignUpResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.forgotPassword(arg0);
+                return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.forgotPassword(arg0);
+            return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getAcceptedRequestNotifications(): Promise<Array<{
+        ride_id: RideId;
+        requester_id: string;
+        ride_destination: string;
+    }>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAcceptedRequestNotifications();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAcceptedRequestNotifications();
+            return result;
+        }
+    }
+    async getDestinationMatchNotifications(): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDestinationMatchNotifications();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDestinationMatchNotifications();
+            return result;
         }
     }
     async getGenderFilteredRides(arg0: GenderPreference | null): Promise<Array<RidePublic>> {
         if (this.processError) {
             try {
-                const result = await this.actor.getGenderFilteredRides(to_candid_opt_n7(this._uploadFile, this._downloadFile, arg0));
-                return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.getGenderFilteredRides(to_candid_opt_n9(this._uploadFile, this._downloadFile, arg0));
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getGenderFilteredRides(to_candid_opt_n7(this._uploadFile, this._downloadFile, arg0));
-            return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.getGenderFilteredRides(to_candid_opt_n9(this._uploadFile, this._downloadFile, arg0));
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
         }
     }
     async getJoinedRides(): Promise<Array<RidePublic>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getJoinedRides();
-                return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getJoinedRides();
-            return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
         }
     }
     async getMessages(arg0: RideId): Promise<Array<ChatMessagePublic>> {
@@ -230,46 +367,63 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getMyRequests(): Promise<Array<{
+        status: JoinRequestStatus;
+        ride_id: RideId;
+    }>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyRequests();
+                return from_candid_vec_n13(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyRequests();
+            return from_candid_vec_n13(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async getMyRides(): Promise<Array<RidePublic>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getMyRides();
-                return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getMyRides();
-            return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
         }
     }
     async getPostedRides(): Promise<Array<RidePublic>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getPostedRides();
-                return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getPostedRides();
-            return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
         }
     }
     async getProfile(): Promise<UserProfilePublic | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getProfile();
-                return from_candid_opt_n11(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getProfile();
-            return from_candid_opt_n11(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n17(this._uploadFile, this._downloadFile, result);
         }
     }
     async getProfilePhoto(arg0: string): Promise<{
@@ -279,84 +433,186 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.getProfilePhoto(arg0);
-                return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getProfilePhoto(arg0);
-            return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n21(this._uploadFile, this._downloadFile, result);
         }
     }
     async getRideDetails(arg0: RideId): Promise<RidePublic | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getRideDetails(arg0);
-                return from_candid_opt_n15(this._uploadFile, this._downloadFile, result);
+                return from_candid_opt_n22(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getRideDetails(arg0);
-            return from_candid_opt_n15(this._uploadFile, this._downloadFile, result);
+            return from_candid_opt_n22(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getRideRequests(arg0: RideId): Promise<{
+        __kind__: "ok";
+        ok: Array<UserProfilePublic>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getRideRequests(arg0);
+                return from_candid_variant_n23(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getRideRequests(arg0);
+            return from_candid_variant_n23(this._uploadFile, this._downloadFile, result);
         }
     }
     async getRides(): Promise<Array<RidePublic>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getRides();
-                return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getRides();
-            return from_candid_vec_n10(this._uploadFile, this._downloadFile, result);
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
         }
     }
     async joinRide(arg0: RideId): Promise<JoinResult> {
         if (this.processError) {
             try {
                 const result = await this.actor.joinRide(arg0);
-                return from_candid_JoinResult_n16(this._uploadFile, this._downloadFile, result);
+                return from_candid_JoinResult_n25(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.joinRide(arg0);
-            return from_candid_JoinResult_n16(this._uploadFile, this._downloadFile, result);
+            return from_candid_JoinResult_n25(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async login(arg0: string, arg1: string): Promise<AuthResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.login(arg0, arg1);
+                return from_candid_AuthResult_n26(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.login(arg0, arg1);
+            return from_candid_AuthResult_n26(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async rejectJoinRequest(arg0: RideId, arg1: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectJoinRequest(arg0, arg1);
+                return from_candid_variant_n29(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rejectJoinRequest(arg0, arg1);
+            return from_candid_variant_n29(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async resetPassword(arg0: string, arg1: string, arg2: string): Promise<SignUpResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.resetPassword(arg0, arg1, arg2);
+                return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.resetPassword(arg0, arg1, arg2);
+            return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
         }
     }
     async saveMessage(arg0: RideId, arg1: string): Promise<SaveMessageResult> {
         if (this.processError) {
             try {
                 const result = await this.actor.saveMessage(arg0, arg1);
-                return from_candid_SaveMessageResult_n17(this._uploadFile, this._downloadFile, result);
+                return from_candid_SaveMessageResult_n30(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.saveMessage(arg0, arg1);
-            return from_candid_SaveMessageResult_n17(this._uploadFile, this._downloadFile, result);
+            return from_candid_SaveMessageResult_n30(this._uploadFile, this._downloadFile, result);
         }
     }
-    async setProfile(arg0: string, arg1: string, arg2: GenderPreference): Promise<UserProfilePublic> {
+    async sendJoinRequest(arg0: RideId): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
         if (this.processError) {
             try {
-                const result = await this.actor.setProfile(arg0, arg1, to_candid_GenderPreference_n8(this._uploadFile, this._downloadFile, arg2));
-                return from_candid_UserProfilePublic_n12(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.sendJoinRequest(arg0);
+                return from_candid_variant_n29(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.setProfile(arg0, arg1, to_candid_GenderPreference_n8(this._uploadFile, this._downloadFile, arg2));
-            return from_candid_UserProfilePublic_n12(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.sendJoinRequest(arg0);
+            return from_candid_variant_n29(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async sendSignupOTP(arg0: string): Promise<SignUpResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.sendSignupOTP(arg0);
+                return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.sendSignupOTP(arg0);
+            return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async setProfile(arg0: string, arg1: string, arg2: GenderPreference, arg3: string | null): Promise<UserProfilePublic> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setProfile(arg0, arg1, to_candid_GenderPreference_n10(this._uploadFile, this._downloadFile, arg2), to_candid_opt_n32(this._uploadFile, this._downloadFile, arg3));
+                return from_candid_UserProfilePublic_n18(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setProfile(arg0, arg1, to_candid_GenderPreference_n10(this._uploadFile, this._downloadFile, arg2), to_candid_opt_n32(this._uploadFile, this._downloadFile, arg3));
+            return from_candid_UserProfilePublic_n18(this._uploadFile, this._downloadFile, result);
         }
     }
     async setProfilePhoto(arg0: Uint8Array, arg1: string): Promise<void> {
@@ -373,46 +629,86 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async signUp(arg0: string, arg1: string, arg2: GenderPreference): Promise<SignUpResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.signUp(arg0, arg1, to_candid_GenderPreference_n10(this._uploadFile, this._downloadFile, arg2));
+                return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.signUp(arg0, arg1, to_candid_GenderPreference_n10(this._uploadFile, this._downloadFile, arg2));
+            return from_candid_SignUpResult_n7(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async verifyOTP(arg0: string, arg1: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.verifyOTP(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.verifyOTP(arg0, arg1);
+            return result;
+        }
+    }
     async withdrawRide(arg0: RideId): Promise<WithdrawResult> {
         if (this.processError) {
             try {
                 const result = await this.actor.withdrawRide(arg0);
-                return from_candid_WithdrawResult_n19(this._uploadFile, this._downloadFile, result);
+                return from_candid_WithdrawResult_n33(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.withdrawRide(arg0);
-            return from_candid_WithdrawResult_n19(this._uploadFile, this._downloadFile, result);
+            return from_candid_WithdrawResult_n33(this._uploadFile, this._downloadFile, result);
         }
     }
 }
-function from_candid_CreateRideResult_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CreateRideResult): CreateRideResult {
-    return from_candid_variant_n2(_uploadFile, _downloadFile, value);
+function from_candid_AuthResult_n26(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _AuthResult): AuthResult {
+    return from_candid_variant_n27(_uploadFile, _downloadFile, value);
 }
-function from_candid_GenderPreference_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _GenderPreference): GenderPreference {
-    return from_candid_variant_n6(_uploadFile, _downloadFile, value);
+function from_candid_CreateRideResult_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CreateRideResult): CreateRideResult {
+    return from_candid_variant_n1(_uploadFile, _downloadFile, value);
 }
-function from_candid_JoinResult_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _JoinResult): JoinResult {
-    return from_candid_variant_n2(_uploadFile, _downloadFile, value);
+function from_candid_GenderPreference_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _GenderPreference): GenderPreference {
+    return from_candid_variant_n5(_uploadFile, _downloadFile, value);
 }
-function from_candid_RidePublic_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _RidePublic): RidePublic {
-    return from_candid_record_n4(_uploadFile, _downloadFile, value);
+function from_candid_JoinRequestStatus_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _JoinRequestStatus): JoinRequestStatus {
+    return from_candid_variant_n16(_uploadFile, _downloadFile, value);
 }
-function from_candid_SaveMessageResult_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SaveMessageResult): SaveMessageResult {
-    return from_candid_variant_n18(_uploadFile, _downloadFile, value);
+function from_candid_JoinResult_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _JoinResult): JoinResult {
+    return from_candid_variant_n1(_uploadFile, _downloadFile, value);
 }
-function from_candid_UserProfilePublic_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserProfilePublic): UserProfilePublic {
-    return from_candid_record_n13(_uploadFile, _downloadFile, value);
+function from_candid_RidePublic_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _RidePublic): RidePublic {
+    return from_candid_record_n3(_uploadFile, _downloadFile, value);
 }
-function from_candid_WithdrawResult_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _WithdrawResult): WithdrawResult {
-    return from_candid_variant_n20(_uploadFile, _downloadFile, value);
+function from_candid_SaveMessageResult_n30(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SaveMessageResult): SaveMessageResult {
+    return from_candid_variant_n31(_uploadFile, _downloadFile, value);
 }
-function from_candid_opt_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfilePublic]): UserProfilePublic | null {
-    return value.length === 0 ? null : from_candid_UserProfilePublic_n12(_uploadFile, _downloadFile, value[0]);
+function from_candid_SignUpResult_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _SignUpResult): SignUpResult {
+    return from_candid_variant_n8(_uploadFile, _downloadFile, value);
 }
-function from_candid_opt_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [{
+function from_candid_UserProfilePublic_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserProfilePublic): UserProfilePublic {
+    return from_candid_record_n19(_uploadFile, _downloadFile, value);
+}
+function from_candid_WithdrawResult_n33(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _WithdrawResult): WithdrawResult {
+    return from_candid_variant_n34(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfilePublic]): UserProfilePublic | null {
+    return value.length === 0 ? null : from_candid_UserProfilePublic_n18(_uploadFile, _downloadFile, value[0]);
+}
+function from_candid_opt_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
+    return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [{
         data: Uint8Array;
         mime: string;
     }]): {
@@ -421,31 +717,58 @@ function from_candid_opt_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8A
 } | null {
     return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_RidePublic]): RidePublic | null {
-    return value.length === 0 ? null : from_candid_RidePublic_n3(_uploadFile, _downloadFile, value[0]);
+function from_candid_opt_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_RidePublic]): RidePublic | null {
+    return value.length === 0 ? null : from_candid_RidePublic_n2(_uploadFile, _downloadFile, value[0]);
 }
-function from_candid_record_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    status: _JoinRequestStatus;
+    ride_id: _RideId;
+}): {
+    status: JoinRequestStatus;
+    ride_id: RideId;
+} {
+    return {
+        status: from_candid_JoinRequestStatus_n15(_uploadFile, _downloadFile, value.status),
+        ride_id: value.ride_id
+    };
+}
+function from_candid_record_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: string;
     name: string;
     hasPhoto: boolean;
     email: string;
     gender: _GenderPreference;
+    preferred_destination: [] | [string];
 }): {
     id: string;
     name: string;
     hasPhoto: boolean;
     email: string;
     gender: GenderPreference;
+    preferred_destination?: string;
 } {
     return {
         id: value.id,
         name: value.name,
         hasPhoto: value.hasPhoto,
         email: value.email,
-        gender: from_candid_GenderPreference_n5(_uploadFile, _downloadFile, value.gender)
+        gender: from_candid_GenderPreference_n4(_uploadFile, _downloadFile, value.gender),
+        preferred_destination: record_opt_to_undefined(from_candid_opt_n20(_uploadFile, _downloadFile, value.preferred_destination))
     };
 }
-function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_record_n28(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    userId: string;
+    gender: _GenderPreference;
+}): {
+    userId: string;
+    gender: GenderPreference;
+} {
+    return {
+        userId: value.userId,
+        gender: from_candid_GenderPreference_n4(_uploadFile, _downloadFile, value.gender)
+    };
+}
+function from_candid_record_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: _RideId;
     joined_users: Array<string>;
     destination: string;
@@ -454,7 +777,10 @@ function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint
     seats_total: bigint;
     total_fare: bigint;
     seats_filled: bigint;
+    pending_requests: Array<string>;
+    female_only: boolean;
     datetime: _Timestamp;
+    confirmed_users: Array<string>;
 }): {
     id: RideId;
     joined_users: Array<string>;
@@ -464,21 +790,118 @@ function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint
     seats_total: bigint;
     total_fare: bigint;
     seats_filled: bigint;
+    pending_requests: Array<string>;
+    female_only: boolean;
     datetime: Timestamp;
+    confirmed_users: Array<string>;
 } {
     return {
         id: value.id,
         joined_users: value.joined_users,
         destination: value.destination,
         creator_id: value.creator_id,
-        creator_gender: from_candid_GenderPreference_n5(_uploadFile, _downloadFile, value.creator_gender),
+        creator_gender: from_candid_GenderPreference_n4(_uploadFile, _downloadFile, value.creator_gender),
         seats_total: value.seats_total,
         total_fare: value.total_fare,
         seats_filled: value.seats_filled,
-        datetime: value.datetime
+        pending_requests: value.pending_requests,
+        female_only: value.female_only,
+        datetime: value.datetime,
+        confirmed_users: value.confirmed_users
     };
 }
-function from_candid_variant_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: _RidePublic;
+} | {
+    err: string;
+}): {
+    __kind__: "ok";
+    ok: RidePublic;
+} | {
+    __kind__: "err";
+    err: string;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: from_candid_RidePublic_n2(_uploadFile, _downloadFile, value.ok)
+    } : "err" in value ? {
+        __kind__: "err",
+        err: value.err
+    } : value;
+}
+function from_candid_variant_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    pending: null;
+} | {
+    rejected: null;
+} | {
+    accepted: null;
+}): JoinRequestStatus {
+    return "pending" in value ? JoinRequestStatus.pending : "rejected" in value ? JoinRequestStatus.rejected : "accepted" in value ? JoinRequestStatus.accepted : value;
+}
+function from_candid_variant_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: Array<_UserProfilePublic>;
+} | {
+    err: string;
+}): {
+    __kind__: "ok";
+    ok: Array<UserProfilePublic>;
+} | {
+    __kind__: "err";
+    err: string;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: from_candid_vec_n24(_uploadFile, _downloadFile, value.ok)
+    } : "err" in value ? {
+        __kind__: "err",
+        err: value.err
+    } : value;
+}
+function from_candid_variant_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: {
+        userId: string;
+        gender: _GenderPreference;
+    };
+} | {
+    err: string;
+}): {
+    __kind__: "ok";
+    ok: {
+        userId: string;
+        gender: GenderPreference;
+    };
+} | {
+    __kind__: "err";
+    err: string;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: from_candid_record_n28(_uploadFile, _downloadFile, value.ok)
+    } : "err" in value ? {
+        __kind__: "err",
+        err: value.err
+    } : value;
+}
+function from_candid_variant_n29(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: null;
+} | {
+    err: string;
+}): {
+    __kind__: "ok";
+    ok: null;
+} | {
+    __kind__: "err";
+    err: string;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: value.ok
+    } : "err" in value ? {
+        __kind__: "err",
+        err: value.err
+    } : value;
+}
+function from_candid_variant_n31(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     ok: _ChatMessagePublic;
 } | {
     notMember: null;
@@ -505,26 +928,7 @@ function from_candid_variant_n18(_uploadFile: (file: ExternalBlob) => Promise<Ui
         rideNotFound: value.rideNotFound
     } : value;
 }
-function from_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: _RidePublic;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: RidePublic;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: from_candid_RidePublic_n3(_uploadFile, _downloadFile, value.ok)
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n34(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     ok: null;
 } | {
     notJoined: null;
@@ -533,30 +937,68 @@ function from_candid_variant_n20(_uploadFile: (file: ExternalBlob) => Promise<Ui
 }): WithdrawResult {
     return "ok" in value ? WithdrawResult.ok : "notJoined" in value ? WithdrawResult.notJoined : "rideNotFound" in value ? WithdrawResult.rideNotFound : value;
 }
-function from_candid_variant_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     female: null;
 } | {
     male: null;
 } | {
     none: null;
+} | {
+    lgbtq: null;
 }): GenderPreference {
-    return "female" in value ? GenderPreference.female : "male" in value ? GenderPreference.male : "none" in value ? GenderPreference.none : value;
+    return "female" in value ? GenderPreference.female : "male" in value ? GenderPreference.male : "none" in value ? GenderPreference.none : "lgbtq" in value ? GenderPreference.lgbtq : value;
 }
-function from_candid_vec_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_RidePublic>): Array<RidePublic> {
-    return value.map((x)=>from_candid_RidePublic_n3(_uploadFile, _downloadFile, x));
+function from_candid_variant_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    ok: string;
+} | {
+    err: string;
+}): {
+    __kind__: "ok";
+    ok: string;
+} | {
+    __kind__: "err";
+    err: string;
+} {
+    return "ok" in value ? {
+        __kind__: "ok",
+        ok: value.ok
+    } : "err" in value ? {
+        __kind__: "err",
+        err: value.err
+    } : value;
 }
-function to_candid_GenderPreference_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference): _GenderPreference {
-    return to_candid_variant_n9(_uploadFile, _downloadFile, value);
+function from_candid_vec_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_RidePublic>): Array<RidePublic> {
+    return value.map((x)=>from_candid_RidePublic_n2(_uploadFile, _downloadFile, x));
 }
-function to_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference | null): [] | [_GenderPreference] {
-    return value === null ? candid_none() : candid_some(to_candid_GenderPreference_n8(_uploadFile, _downloadFile, value));
+function from_candid_vec_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<{
+    status: _JoinRequestStatus;
+    ride_id: _RideId;
+}>): Array<{
+    status: JoinRequestStatus;
+    ride_id: RideId;
+}> {
+    return value.map((x)=>from_candid_record_n14(_uploadFile, _downloadFile, x));
 }
-function to_candid_variant_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference): {
+function from_candid_vec_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_UserProfilePublic>): Array<UserProfilePublic> {
+    return value.map((x)=>from_candid_UserProfilePublic_n18(_uploadFile, _downloadFile, x));
+}
+function to_candid_GenderPreference_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference): _GenderPreference {
+    return to_candid_variant_n11(_uploadFile, _downloadFile, value);
+}
+function to_candid_opt_n32(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: string | null): [] | [string] {
+    return value === null ? candid_none() : candid_some(value);
+}
+function to_candid_opt_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference | null): [] | [_GenderPreference] {
+    return value === null ? candid_none() : candid_some(to_candid_GenderPreference_n10(_uploadFile, _downloadFile, value));
+}
+function to_candid_variant_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: GenderPreference): {
     female: null;
 } | {
     male: null;
 } | {
     none: null;
+} | {
+    lgbtq: null;
 } {
     return value == GenderPreference.female ? {
         female: null
@@ -564,6 +1006,8 @@ function to_candid_variant_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         male: null
     } : value == GenderPreference.none ? {
         none: null
+    } : value == GenderPreference.lgbtq ? {
+        lgbtq: null
     } : value;
 }
 export interface CreateActorOptions {

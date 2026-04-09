@@ -2,9 +2,12 @@ import Types "types/rides-and-chat";
 import RidesAndChatMixin "mixins/rides-and-chat-api";
 import RidesLib "lib/rides-and-chat";
 
+
 import List "mo:core/List";
 import Map "mo:core/Map";
 import Principal "mo:core/Principal";
+
+
 
 
 actor {
@@ -12,6 +15,9 @@ actor {
   let rides = List.empty<Types.Ride>();
   let messages = Map.empty<Types.RideId, List.List<Types.ChatMessage>>();
   let profiles = Map.empty<Types.UserId, Types.UserProfile>();
+  let authUsers = Map.empty<Types.UserId, Types.AuthUser>();
+  let emailIndex = Map.empty<Text, Types.UserId>();
+  let otpStore = Map.empty<Text, Types.OTPRecord>();
   let nextRideId = { var val : Nat = 0 };
   let nextMessageId = { var val : Nat = 0 };
 
@@ -19,5 +25,5 @@ actor {
   RidesLib.seedDemoRides(rides, nextRideId, Principal.anonymous());
 
   // --- Mixins ---
-  include RidesAndChatMixin(rides, messages, profiles, nextRideId, nextMessageId);
+  include RidesAndChatMixin(rides, messages, profiles, authUsers, emailIndex, otpStore, nextRideId, nextMessageId);
 };

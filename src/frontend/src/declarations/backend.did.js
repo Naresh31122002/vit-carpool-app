@@ -8,13 +8,14 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const Timestamp = IDL.Int;
 export const RideId = IDL.Nat;
 export const GenderPreference = IDL.Variant({
   'female' : IDL.Null,
   'male' : IDL.Null,
   'none' : IDL.Null,
+  'lgbtq' : IDL.Null,
 });
+export const Timestamp = IDL.Int;
 export const RidePublic = IDL.Record({
   'id' : RideId,
   'joined_users' : IDL.Vec(IDL.Text),
@@ -24,12 +25,16 @@ export const RidePublic = IDL.Record({
   'seats_total' : IDL.Nat,
   'total_fare' : IDL.Nat,
   'seats_filled' : IDL.Nat,
+  'pending_requests' : IDL.Vec(IDL.Text),
+  'female_only' : IDL.Bool,
   'datetime' : Timestamp,
+  'confirmed_users' : IDL.Vec(IDL.Text),
 });
 export const CreateRideResult = IDL.Variant({
   'ok' : RidePublic,
   'err' : IDL.Text,
 });
+export const SignUpResult = IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text });
 export const MessageId = IDL.Nat;
 export const ChatMessagePublic = IDL.Record({
   'id' : MessageId,
@@ -38,14 +43,24 @@ export const ChatMessagePublic = IDL.Record({
   'sender_id' : IDL.Text,
   'timestamp' : Timestamp,
 });
+export const JoinRequestStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'rejected' : IDL.Null,
+  'accepted' : IDL.Null,
+});
 export const UserProfilePublic = IDL.Record({
   'id' : IDL.Text,
   'name' : IDL.Text,
   'hasPhoto' : IDL.Bool,
   'email' : IDL.Text,
   'gender' : GenderPreference,
+  'preferred_destination' : IDL.Opt(IDL.Text),
 });
 export const JoinResult = IDL.Variant({ 'ok' : RidePublic, 'err' : IDL.Text });
+export const AuthResult = IDL.Variant({
+  'ok' : IDL.Record({ 'userId' : IDL.Text, 'gender' : GenderPreference }),
+  'err' : IDL.Text,
+});
 export const SaveMessageResult = IDL.Variant({
   'ok' : ChatMessagePublic,
   'notMember' : IDL.Null,
@@ -58,11 +73,31 @@ export const WithdrawResult = IDL.Variant({
 });
 
 export const idlService = IDL.Service({
+  'approveJoinRequest' : IDL.Func(
+      [RideId, IDL.Text],
+      [IDL.Variant({ 'ok' : RidePublic, 'err' : IDL.Text })],
+      [],
+    ),
   'createRide' : IDL.Func(
-      [IDL.Text, Timestamp, IDL.Nat, IDL.Nat],
+      [IDL.Text, Timestamp, IDL.Nat, IDL.Nat, IDL.Bool],
       [CreateRideResult],
       [],
     ),
+  'forgotPassword' : IDL.Func([IDL.Text], [SignUpResult], []),
+  'getAcceptedRequestNotifications' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'ride_id' : RideId,
+            'requester_id' : IDL.Text,
+            'ride_destination' : IDL.Text,
+          })
+        ),
+      ],
+      ['query'],
+    ),
+  'getDestinationMatchNotifications' : IDL.Func([], [IDL.Nat], ['query']),
   'getGenderFilteredRides' : IDL.Func(
       [IDL.Opt(GenderPreference)],
       [IDL.Vec(RidePublic)],
@@ -70,6 +105,15 @@ export const idlService = IDL.Service({
     ),
   'getJoinedRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
   'getMessages' : IDL.Func([RideId], [IDL.Vec(ChatMessagePublic)], ['query']),
+  'getMyRequests' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({ 'status' : JoinRequestStatus, 'ride_id' : RideId })
+        ),
+      ],
+      ['query'],
+    ),
   'getMyRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
   'getPostedRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
   'getProfile' : IDL.Func([], [IDL.Opt(UserProfilePublic)], ['query']),
@@ -79,28 +123,57 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getRideDetails' : IDL.Func([RideId], [IDL.Opt(RidePublic)], ['query']),
+  'getRideRequests' : IDL.Func(
+      [RideId],
+      [IDL.Variant({ 'ok' : IDL.Vec(UserProfilePublic), 'err' : IDL.Text })],
+      [],
+    ),
   'getRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
   'joinRide' : IDL.Func([RideId], [JoinResult], []),
+  'login' : IDL.Func([IDL.Text, IDL.Text], [AuthResult], []),
+  'rejectJoinRequest' : IDL.Func(
+      [RideId, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'resetPassword' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [SignUpResult],
+      [],
+    ),
   'saveMessage' : IDL.Func([RideId, IDL.Text], [SaveMessageResult], []),
+  'sendJoinRequest' : IDL.Func(
+      [RideId],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'sendSignupOTP' : IDL.Func([IDL.Text], [SignUpResult], []),
   'setProfile' : IDL.Func(
-      [IDL.Text, IDL.Text, GenderPreference],
+      [IDL.Text, IDL.Text, GenderPreference, IDL.Opt(IDL.Text)],
       [UserProfilePublic],
       [],
     ),
   'setProfilePhoto' : IDL.Func([IDL.Vec(IDL.Nat8), IDL.Text], [], []),
+  'signUp' : IDL.Func(
+      [IDL.Text, IDL.Text, GenderPreference],
+      [SignUpResult],
+      [],
+    ),
+  'verifyOTP' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
   'withdrawRide' : IDL.Func([RideId], [WithdrawResult], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const Timestamp = IDL.Int;
   const RideId = IDL.Nat;
   const GenderPreference = IDL.Variant({
     'female' : IDL.Null,
     'male' : IDL.Null,
     'none' : IDL.Null,
+    'lgbtq' : IDL.Null,
   });
+  const Timestamp = IDL.Int;
   const RidePublic = IDL.Record({
     'id' : RideId,
     'joined_users' : IDL.Vec(IDL.Text),
@@ -110,9 +183,13 @@ export const idlFactory = ({ IDL }) => {
     'seats_total' : IDL.Nat,
     'total_fare' : IDL.Nat,
     'seats_filled' : IDL.Nat,
+    'pending_requests' : IDL.Vec(IDL.Text),
+    'female_only' : IDL.Bool,
     'datetime' : Timestamp,
+    'confirmed_users' : IDL.Vec(IDL.Text),
   });
   const CreateRideResult = IDL.Variant({ 'ok' : RidePublic, 'err' : IDL.Text });
+  const SignUpResult = IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text });
   const MessageId = IDL.Nat;
   const ChatMessagePublic = IDL.Record({
     'id' : MessageId,
@@ -121,14 +198,24 @@ export const idlFactory = ({ IDL }) => {
     'sender_id' : IDL.Text,
     'timestamp' : Timestamp,
   });
+  const JoinRequestStatus = IDL.Variant({
+    'pending' : IDL.Null,
+    'rejected' : IDL.Null,
+    'accepted' : IDL.Null,
+  });
   const UserProfilePublic = IDL.Record({
     'id' : IDL.Text,
     'name' : IDL.Text,
     'hasPhoto' : IDL.Bool,
     'email' : IDL.Text,
     'gender' : GenderPreference,
+    'preferred_destination' : IDL.Opt(IDL.Text),
   });
   const JoinResult = IDL.Variant({ 'ok' : RidePublic, 'err' : IDL.Text });
+  const AuthResult = IDL.Variant({
+    'ok' : IDL.Record({ 'userId' : IDL.Text, 'gender' : GenderPreference }),
+    'err' : IDL.Text,
+  });
   const SaveMessageResult = IDL.Variant({
     'ok' : ChatMessagePublic,
     'notMember' : IDL.Null,
@@ -141,11 +228,31 @@ export const idlFactory = ({ IDL }) => {
   });
   
   return IDL.Service({
+    'approveJoinRequest' : IDL.Func(
+        [RideId, IDL.Text],
+        [IDL.Variant({ 'ok' : RidePublic, 'err' : IDL.Text })],
+        [],
+      ),
     'createRide' : IDL.Func(
-        [IDL.Text, Timestamp, IDL.Nat, IDL.Nat],
+        [IDL.Text, Timestamp, IDL.Nat, IDL.Nat, IDL.Bool],
         [CreateRideResult],
         [],
       ),
+    'forgotPassword' : IDL.Func([IDL.Text], [SignUpResult], []),
+    'getAcceptedRequestNotifications' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'ride_id' : RideId,
+              'requester_id' : IDL.Text,
+              'ride_destination' : IDL.Text,
+            })
+          ),
+        ],
+        ['query'],
+      ),
+    'getDestinationMatchNotifications' : IDL.Func([], [IDL.Nat], ['query']),
     'getGenderFilteredRides' : IDL.Func(
         [IDL.Opt(GenderPreference)],
         [IDL.Vec(RidePublic)],
@@ -153,6 +260,15 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getJoinedRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
     'getMessages' : IDL.Func([RideId], [IDL.Vec(ChatMessagePublic)], ['query']),
+    'getMyRequests' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({ 'status' : JoinRequestStatus, 'ride_id' : RideId })
+          ),
+        ],
+        ['query'],
+      ),
     'getMyRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
     'getPostedRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
     'getProfile' : IDL.Func([], [IDL.Opt(UserProfilePublic)], ['query']),
@@ -166,15 +282,43 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getRideDetails' : IDL.Func([RideId], [IDL.Opt(RidePublic)], ['query']),
+    'getRideRequests' : IDL.Func(
+        [RideId],
+        [IDL.Variant({ 'ok' : IDL.Vec(UserProfilePublic), 'err' : IDL.Text })],
+        [],
+      ),
     'getRides' : IDL.Func([], [IDL.Vec(RidePublic)], ['query']),
     'joinRide' : IDL.Func([RideId], [JoinResult], []),
+    'login' : IDL.Func([IDL.Text, IDL.Text], [AuthResult], []),
+    'rejectJoinRequest' : IDL.Func(
+        [RideId, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'resetPassword' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [SignUpResult],
+        [],
+      ),
     'saveMessage' : IDL.Func([RideId, IDL.Text], [SaveMessageResult], []),
+    'sendJoinRequest' : IDL.Func(
+        [RideId],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'sendSignupOTP' : IDL.Func([IDL.Text], [SignUpResult], []),
     'setProfile' : IDL.Func(
-        [IDL.Text, IDL.Text, GenderPreference],
+        [IDL.Text, IDL.Text, GenderPreference, IDL.Opt(IDL.Text)],
         [UserProfilePublic],
         [],
       ),
     'setProfilePhoto' : IDL.Func([IDL.Vec(IDL.Nat8), IDL.Text], [], []),
+    'signUp' : IDL.Func(
+        [IDL.Text, IDL.Text, GenderPreference],
+        [SignUpResult],
+        [],
+      ),
+    'verifyOTP' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], ['query']),
     'withdrawRide' : IDL.Func([RideId], [WithdrawResult], []),
   });
 };

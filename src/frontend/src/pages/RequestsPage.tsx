@@ -1,6 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Layout } from "../components/Layout";
@@ -8,11 +15,20 @@ import { useAuth } from "../hooks/useAuth";
 import {
   type JoinRequestPublic,
   type RideRequestsGroup,
+  getLocalPreferredDestination,
   useApproveJoinRequest,
   useMyPendingRequestsCount,
   useRejectJoinRequest,
   useRequestsForMyRides,
 } from "../hooks/useQueries";
+import { useRides } from "../hooks/useQueries";
+
+// ---- Mock accepted notification ----
+const MOCK_ACCEPTED_REQUEST = {
+  requester_name: "Priya S.",
+  destination: "Chennai Airport",
+  date: "Apr 10",
+};
 
 function RequestCardSkeleton() {
   return (
@@ -94,6 +110,14 @@ function RequestCard({
           <p className="font-semibold text-foreground text-sm truncate">
             {request.requester_name || request.requester_id}
           </p>
+          {request.requester_email && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <ShieldCheck className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+              <p className="text-xs text-emerald-700 font-medium truncate">
+                {request.requester_email}
+              </p>
+            </div>
+          )}
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mt-0.5">
             <Clock className="w-2.5 h-2.5" />
             Requested to join
@@ -185,6 +209,7 @@ export default function RequestsPage() {
   const { isAuthenticated, isInitializing } = useAuth();
   const { data: groups, isLoading } = useRequestsForMyRides();
   const { data: pendingCount } = useMyPendingRequestsCount();
+  const { data: allRides } = useRides();
 
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
@@ -193,6 +218,20 @@ export default function RequestsPage() {
   }, [isAuthenticated, isInitializing, navigate]);
 
   const totalPending = pendingCount !== undefined ? Number(pendingCount) : 0;
+
+  // Destination-match rides
+  const preferredDest = getLocalPreferredDestination();
+  const destMatchRides =
+    preferredDest && allRides
+      ? allRides.filter(
+          (r) =>
+            r.destination.toLowerCase() === preferredDest.toLowerCase() &&
+            Number(r.seats_total) > Number(r.seats_filled),
+        )
+      : [];
+
+  const hasAnyRequests = groups?.some((g) => g.requests.length > 0);
+  const hasDestMatches = destMatchRides.length > 0;
 
   const header = (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -207,7 +246,7 @@ export default function RequestsPage() {
       </button>
       <div className="flex-1">
         <span className="font-display font-semibold text-foreground text-lg">
-          Ride Requests
+          Notifications
         </span>
         {totalPending > 0 && (
           <span className="ml-2 inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive text-destructive-foreground">
@@ -218,38 +257,145 @@ export default function RequestsPage() {
     </div>
   );
 
-  const hasAnyRequests = groups?.some((g) => g.requests.length > 0);
-
   return (
     <Layout activeRoute={routerState.location.pathname} header={header}>
       <div className="px-4 py-4 flex flex-col gap-5">
+        {/* Mock accepted request — always shown at top as demo */}
+        <div
+          className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3"
+          data-ocid="accepted-request-notification"
+        >
+          <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-emerald-800">
+              Request Accepted ✓
+            </p>
+            <p className="text-xs text-emerald-700 mt-0.5 leading-relaxed">
+              <span className="font-medium">
+                {MOCK_ACCEPTED_REQUEST.requester_name}
+              </span>{" "}
+              requested to join your ride to{" "}
+              <span className="font-medium">
+                {MOCK_ACCEPTED_REQUEST.destination}
+              </span>{" "}
+              on {MOCK_ACCEPTED_REQUEST.date}. You accepted this request.
+            </p>
+          </div>
+        </div>
+
+        {/* Destination match section */}
+        {hasDestMatches && (
+          <div
+            className="flex flex-col gap-3"
+            data-ocid="destination-matches-section"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-sky-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-foreground">
+                Rides to Your Destination
+              </p>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200">
+                {destMatchRides.length} new
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {destMatchRides.map((ride) => {
+                const seatsLeft =
+                  Number(ride.seats_total) - Number(ride.seats_filled);
+                const perPerson = Math.ceil(
+                  Number(ride.total_fare) / Number(ride.seats_total),
+                );
+                const dateStr = new Date(
+                  Number(ride.datetime) / 1_000_000,
+                ).toLocaleString("en-IN", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+                return (
+                  <div
+                    key={ride.id.toString()}
+                    className="bg-card border border-sky-200 rounded-2xl p-4 flex flex-col gap-2"
+                    data-ocid="dest-match-ride-card"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                      <p className="text-sm font-semibold text-foreground">
+                        VIT → {ride.destination}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-0.5">
+                        <p className="text-xs text-muted-foreground">
+                          {dateStr}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ₹{perPerson}/person · {seatsLeft} seat
+                          {seatsLeft !== 1 ? "s" : ""} left
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate({
+                            to: "/ride/$rideId",
+                            params: { rideId: ride.id.toString() },
+                          })
+                        }
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-sky-500 text-white transition-smooth active:scale-95"
+                        data-ocid="btn-view-dest-ride"
+                      >
+                        View Ride
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Pending join requests section */}
         {isLoading ? (
           <>
             <RequestCardSkeleton />
             <RequestCardSkeleton />
             <RequestCardSkeleton />
           </>
-        ) : !hasAnyRequests ? (
-          <div
-            className="flex flex-col items-center gap-3 py-20 text-center"
-            data-ocid="empty-requests"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl">
-              🔔
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">
-                No pending requests
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                When students request to join your rides, they'll appear here
+        ) : hasAnyRequests ? (
+          <div className="flex flex-col gap-5">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-foreground">
+                Pending Join Requests
               </p>
             </div>
+            {(groups ?? []).map((group) => (
+              <RideGroup key={group.ride_id.toString()} group={group} />
+            ))}
           </div>
         ) : (
-          (groups ?? []).map((group) => (
-            <RideGroup key={group.ride_id.toString()} group={group} />
-          ))
+          !hasDestMatches && (
+            <div
+              className="flex flex-col items-center gap-3 py-12 text-center"
+              data-ocid="empty-requests"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl">
+                🔔
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">
+                  No pending requests
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  When students request to join your rides, they'll appear here
+                </p>
+              </div>
+            </div>
+          )
         )}
       </div>
     </Layout>

@@ -10,6 +10,10 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type AuthResult = {
+    'ok' : { 'userId' : string, 'gender' : GenderPreference }
+  } |
+  { 'err' : string };
 export interface ChatMessagePublic {
   'id' : MessageId,
   'content' : string,
@@ -21,7 +25,11 @@ export type CreateRideResult = { 'ok' : RidePublic } |
   { 'err' : string };
 export type GenderPreference = { 'female' : null } |
   { 'male' : null } |
-  { 'none' : null };
+  { 'none' : null } |
+  { 'lgbtq' : null };
+export type JoinRequestStatus = { 'pending' : null } |
+  { 'rejected' : null } |
+  { 'accepted' : null };
 export type JoinResult = { 'ok' : RidePublic } |
   { 'err' : string };
 export type MessageId = bigint;
@@ -35,11 +43,16 @@ export interface RidePublic {
   'seats_total' : bigint,
   'total_fare' : bigint,
   'seats_filled' : bigint,
+  'pending_requests' : Array<string>,
+  'female_only' : boolean,
   'datetime' : Timestamp,
+  'confirmed_users' : Array<string>,
 }
 export type SaveMessageResult = { 'ok' : ChatMessagePublic } |
   { 'notMember' : null } |
   { 'rideNotFound' : null };
+export type SignUpResult = { 'ok' : string } |
+  { 'err' : string };
 export type Timestamp = bigint;
 export interface UserProfilePublic {
   'id' : string,
@@ -47,21 +60,43 @@ export interface UserProfilePublic {
   'hasPhoto' : boolean,
   'email' : string,
   'gender' : GenderPreference,
+  'preferred_destination' : [] | [string],
 }
 export type WithdrawResult = { 'ok' : null } |
   { 'notJoined' : null } |
   { 'rideNotFound' : null };
 export interface _SERVICE {
+  'approveJoinRequest' : ActorMethod<
+    [RideId, string],
+    { 'ok' : RidePublic } |
+      { 'err' : string }
+  >,
   'createRide' : ActorMethod<
-    [string, Timestamp, bigint, bigint],
+    [string, Timestamp, bigint, bigint, boolean],
     CreateRideResult
   >,
+  'forgotPassword' : ActorMethod<[string], SignUpResult>,
+  'getAcceptedRequestNotifications' : ActorMethod<
+    [],
+    Array<
+      {
+        'ride_id' : RideId,
+        'requester_id' : string,
+        'ride_destination' : string,
+      }
+    >
+  >,
+  'getDestinationMatchNotifications' : ActorMethod<[], bigint>,
   'getGenderFilteredRides' : ActorMethod<
     [[] | [GenderPreference]],
     Array<RidePublic>
   >,
   'getJoinedRides' : ActorMethod<[], Array<RidePublic>>,
   'getMessages' : ActorMethod<[RideId], Array<ChatMessagePublic>>,
+  'getMyRequests' : ActorMethod<
+    [],
+    Array<{ 'status' : JoinRequestStatus, 'ride_id' : RideId }>
+  >,
   'getMyRides' : ActorMethod<[], Array<RidePublic>>,
   'getPostedRides' : ActorMethod<[], Array<RidePublic>>,
   'getProfile' : ActorMethod<[], [] | [UserProfilePublic]>,
@@ -70,14 +105,34 @@ export interface _SERVICE {
     [] | [{ 'data' : Uint8Array, 'mime' : string }]
   >,
   'getRideDetails' : ActorMethod<[RideId], [] | [RidePublic]>,
+  'getRideRequests' : ActorMethod<
+    [RideId],
+    { 'ok' : Array<UserProfilePublic> } |
+      { 'err' : string }
+  >,
   'getRides' : ActorMethod<[], Array<RidePublic>>,
   'joinRide' : ActorMethod<[RideId], JoinResult>,
+  'login' : ActorMethod<[string, string], AuthResult>,
+  'rejectJoinRequest' : ActorMethod<
+    [RideId, string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'resetPassword' : ActorMethod<[string, string, string], SignUpResult>,
   'saveMessage' : ActorMethod<[RideId, string], SaveMessageResult>,
+  'sendJoinRequest' : ActorMethod<
+    [RideId],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'sendSignupOTP' : ActorMethod<[string], SignUpResult>,
   'setProfile' : ActorMethod<
-    [string, string, GenderPreference],
+    [string, string, GenderPreference, [] | [string]],
     UserProfilePublic
   >,
   'setProfilePhoto' : ActorMethod<[Uint8Array, string], undefined>,
+  'signUp' : ActorMethod<[string, string, GenderPreference], SignUpResult>,
+  'verifyOTP' : ActorMethod<[string, string], boolean>,
   'withdrawRide' : ActorMethod<[RideId], WithdrawResult>,
 }
 export declare const idlService: IDL.ServiceClass;

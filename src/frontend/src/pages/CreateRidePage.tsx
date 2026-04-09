@@ -9,6 +9,187 @@ import { Layout } from "../components/Layout";
 import { useAuth } from "../hooks/useAuth";
 import { useCreateRide } from "../hooks/useQueries";
 
+function FemaleOnlyToggle({
+  enabled,
+  onChange,
+  disabled = false,
+  onDisabledClick,
+}: {
+  enabled: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+  onDisabledClick?: () => void;
+}) {
+  return (
+    <div
+      className={`border rounded-2xl p-4 flex flex-col gap-2 ${
+        disabled
+          ? "bg-muted/40 border-border opacity-60"
+          : "bg-pink-50 border-pink-200"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base">👩</span>
+          <span
+            className={`text-sm font-semibold ${
+              disabled ? "text-muted-foreground" : "text-pink-800"
+            }`}
+          >
+            Female Only Ride
+          </span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-disabled={disabled}
+          onClick={() => {
+            if (disabled) {
+              onDisabledClick?.();
+            } else {
+              onChange(!enabled);
+            }
+          }}
+          data-ocid="toggle-female-only"
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-400 ${
+            disabled
+              ? "bg-muted cursor-not-allowed"
+              : enabled
+                ? "bg-pink-500"
+                : "bg-muted"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-card shadow-sm transition-transform duration-200 ${
+              enabled && !disabled ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+      <p
+        className={`text-xs ${disabled ? "text-muted-foreground" : "text-pink-600"}`}
+      >
+        {disabled
+          ? "This option is only available for female users."
+          : "Only female students can join this ride."}
+      </p>
+    </div>
+  );
+}
+
+// ---- 12-hour AM/PM time picker ----
+interface AmPmTimePickerProps {
+  value: string; // internal 24-hour "HH:MM" for backend compatibility
+  onChange: (val: string) => void;
+}
+
+function AmPmTimePicker({ value, onChange }: AmPmTimePickerProps) {
+  const parseValue = (
+    v: string,
+  ): { hour: string; minute: string; ampm: "AM" | "PM" } => {
+    if (!v) return { hour: "9", minute: "00", ampm: "AM" };
+    const [hStr, mStr] = v.split(":");
+    const h24 = Number.parseInt(hStr, 10);
+    const ampm: "AM" | "PM" = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    return { hour: String(h12), minute: mStr || "00", ampm };
+  };
+
+  const { hour, minute, ampm } = parseValue(value);
+
+  const buildValue = (h: string, m: string, ap: "AM" | "PM"): string => {
+    const hNum = Number.parseInt(h, 10);
+    let h24 = hNum;
+    if (ap === "AM" && hNum === 12) h24 = 0;
+    else if (ap === "PM" && hNum !== 12) h24 = hNum + 12;
+    return `${String(h24).padStart(2, "0")}:${m}`;
+  };
+
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minutes = [
+    "00",
+    "05",
+    "10",
+    "15",
+    "20",
+    "25",
+    "30",
+    "35",
+    "40",
+    "45",
+    "50",
+    "55",
+  ];
+
+  return (
+    <fieldset
+      className="flex items-center gap-2"
+      data-ocid="time-picker"
+      aria-label="Time picker"
+    >
+      {/* Hour selector */}
+      <div className="relative flex-1">
+        <select
+          value={hour}
+          onChange={(e) => onChange(buildValue(e.target.value, minute, ampm))}
+          className="w-full h-11 rounded-xl border border-input bg-background px-3 pr-8 text-sm appearance-none text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          data-ocid="select-hour"
+          aria-label="Hour"
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+      </div>
+
+      <span className="text-foreground font-semibold text-sm flex-shrink-0">
+        :
+      </span>
+
+      {/* Minute selector */}
+      <div className="relative flex-1">
+        <select
+          value={minute}
+          onChange={(e) => onChange(buildValue(hour, e.target.value, ampm))}
+          className="w-full h-11 rounded-xl border border-input bg-background px-3 pr-8 text-sm appearance-none text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          data-ocid="select-minute"
+          aria-label="Minute"
+        >
+          {minutes.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+      </div>
+
+      {/* AM/PM toggle */}
+      <div className="flex rounded-xl overflow-hidden border border-input h-11 flex-shrink-0">
+        {(["AM", "PM"] as const).map((ap) => (
+          <button
+            key={ap}
+            type="button"
+            onClick={() => onChange(buildValue(hour, minute, ap))}
+            className={`w-12 h-full text-sm font-semibold transition-colors duration-150 ${
+              ampm === ap
+                ? "bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground hover:bg-muted"
+            }`}
+            data-ocid={`btn-ampm-${ap.toLowerCase()}`}
+          >
+            {ap}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 const DESTINATIONS = [
   "Chennai Airport (MAA)",
   "Chennai Central Railway",
@@ -27,10 +208,15 @@ export default function CreateRidePage() {
   const [destination, setDestination] = useState("");
   const [customDest, setCustomDest] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [time, setTime] = useState("09:00"); // default 9:00 AM
   const [fare, setFare] = useState("");
   const [seats, setSeats] = useState("4");
   const [showDestList, setShowDestList] = useState(false);
+  const [femaleOnly, setFemaleOnly] = useState(false);
+  const [showFemaleOnlyMsg, setShowFemaleOnlyMsg] = useState(false);
+
+  const storedGender = localStorage.getItem("vit_user_gender");
+  const isFemaleUser = storedGender === "female";
 
   const selectedDest = destination || customDest;
   const fareNum = Number(fare);
@@ -57,6 +243,7 @@ export default function CreateRidePage() {
       datetime: datetimeNs,
       total_fare: BigInt(fareNum),
       seats_total: BigInt(seatsNum),
+      female_only: femaleOnly,
     });
 
     if (result.__kind__ === "ok") {
@@ -148,7 +335,7 @@ export default function CreateRidePage() {
         </div>
 
         {/* Date & Time */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Date</Label>
             <Input
@@ -163,14 +350,7 @@ export default function CreateRidePage() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Time</Label>
-            <Input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="rounded-xl h-11 text-sm"
-              required
-              data-ocid="input-time"
-            />
+            <AmPmTimePicker value={time} onChange={setTime} />
           </div>
         </div>
 
@@ -222,6 +402,21 @@ export default function CreateRidePage() {
             </span>
           </div>
         )}
+
+        {/* Female Only toggle — visible to all, disabled for non-female users */}
+        <div>
+          <FemaleOnlyToggle
+            enabled={femaleOnly}
+            onChange={setFemaleOnly}
+            disabled={!isFemaleUser}
+            onDisabledClick={() => setShowFemaleOnlyMsg(true)}
+          />
+          {showFemaleOnlyMsg && !isFemaleUser && (
+            <p className="mt-2 text-xs text-muted-foreground text-center">
+              The Female Only Ride option is only available for female users.
+            </p>
+          )}
+        </div>
 
         <Button
           type="submit"

@@ -3,36 +3,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Camera, LogOut, Mail, User, Users } from "lucide-react";
+import { Camera, LogOut, Mail, MapPin, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { GenderPreference } from "../backend";
 import { Layout } from "../components/Layout";
 import { useAuth } from "../hooks/useAuth";
 import {
+  getLocalPreferredDestination,
+  setLocalPreferredDestination,
   useGetProfilePhoto,
   useProfile,
   useSetProfile,
   useSetProfilePhoto,
 } from "../hooks/useQueries";
-
-const GENDER_OPTIONS: {
-  value: GenderPreference;
-  label: string;
-  desc: string;
-}[] = [
-  { value: GenderPreference.none, label: "None", desc: "See all rides" },
-  {
-    value: GenderPreference.female,
-    label: "Female",
-    desc: "Only see rides by female students",
-  },
-  {
-    value: GenderPreference.male,
-    label: "Male",
-    desc: "Only see rides by male students",
-  },
-];
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -48,6 +32,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [gender, setGender] = useState<GenderPreference>(GenderPreference.none);
+  const [prefDest, setPrefDest] = useState("");
   const [editing, setEditing] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +49,8 @@ export default function ProfilePage() {
       setEmail(profile.email);
       setGender(profile.gender);
     }
+    // Load preferred destination from localStorage
+    setPrefDest(getLocalPreferredDestination());
   }, [profile]);
 
   // Build blob URL from photo data
@@ -92,7 +79,10 @@ export default function ProfilePage() {
       name: name.trim(),
       email: email.trim(),
       gender,
+      preferred_destination: prefDest,
     });
+    // Also persist locally (mutation already does it but ensure it's fresh)
+    setLocalPreferredDestination(prefDest);
     toast.success("Profile updated!");
     setEditing(false);
   };
@@ -109,21 +99,17 @@ export default function ProfilePage() {
       return;
     }
 
-    // Preview
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
 
-    // Upload
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     await setPhotoMutation.mutateAsync({ data, mime: file.type });
     toast.success("Photo updated!");
   };
 
-  const genderLabel =
-    GENDER_OPTIONS.find((g) => g.value === (profile?.gender ?? "none"))
-      ?.label ?? "None";
+  const savedDest = getLocalPreferredDestination();
 
   const header = (
     <div className="flex items-center justify-between px-4 py-3">
@@ -207,32 +193,13 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 {userId ? `${userId.slice(0, 16)}...` : ""}
               </p>
-              {profile && (
-                <span className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-secondary bg-secondary/10 border border-secondary/20 rounded-full px-2.5 py-0.5">
-                  <Users className="w-3 h-3" />
-                  {genderLabel} preference
-                </span>
-              )}
             </div>
           )}
         </div>
 
         {/* Profile form */}
         <div className="bg-card rounded-2xl border border-border p-5">
-          {!editing && !profile ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground text-center">
-                Complete your profile to get started
-              </p>
-              <Button
-                className="w-full rounded-xl"
-                onClick={() => setEditing(true)}
-                data-ocid="btn-setup-profile"
-              >
-                Set Up Profile
-              </Button>
-            </div>
-          ) : editing || !profile ? (
+          {editing ? (
             <form onSubmit={handleSave} className="flex flex-col gap-4">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
@@ -267,31 +234,21 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              {/* Gender preference */}
-              <div className="space-y-2">
+              {/* Preferred Destination */}
+              <div className="space-y-1.5">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5" />
-                  Ride Preference
+                  <MapPin className="w-3.5 h-3.5" />
+                  Preferred Destination
                 </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {GENDER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setGender(opt.value)}
-                      className={`rounded-xl border px-3 py-2.5 text-center transition-smooth ${
-                        gender === opt.value
-                          ? "bg-primary/10 border-primary text-primary font-semibold"
-                          : "bg-muted/50 border-border text-muted-foreground"
-                      }`}
-                      data-ocid={`btn-gender-${opt.value}`}
-                    >
-                      <p className="text-sm font-medium">{opt.label}</p>
-                    </button>
-                  ))}
-                </div>
+                <Input
+                  value={prefDest}
+                  onChange={(e) => setPrefDest(e.target.value)}
+                  placeholder="e.g. Chennai Airport, Railway Station..."
+                  className="rounded-xl h-11"
+                  data-ocid="input-preferred-destination"
+                />
                 <p className="text-xs text-muted-foreground">
-                  {GENDER_OPTIONS.find((o) => o.value === gender)?.desc}
+                  Get notified when someone posts a ride to this destination
                 </p>
               </div>
 
@@ -306,6 +263,7 @@ export default function ProfilePage() {
                       setName(profile.name);
                       setEmail(profile.email);
                       setGender(profile.gender);
+                      setPrefDest(getLocalPreferredDestination());
                     }}
                     data-ocid="btn-cancel-edit"
                   >
@@ -325,43 +283,44 @@ export default function ProfilePage() {
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3">
+                {profile?.name && (
+                  <div className="flex items-center gap-3 py-2">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+                      <User className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Name</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {profile.name}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {profile?.email && (
+                  <div className="flex items-center gap-3 py-2">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {profile.email}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 py-2">
                   <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Name</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {profile.name}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 py-2">
-                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {profile.email}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 py-2">
-                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">
-                      Ride Preference
+                      Preferred Destination
                     </p>
-                    <p className="text-sm font-medium text-foreground capitalize">
-                      {genderLabel}
-                      {profile.gender === GenderPreference.female && (
-                        <span className="ml-1.5 text-xs text-secondary">
-                          · Female-only feed
-                        </span>
-                      )}
+                    <p
+                      className={`text-sm font-medium ${savedDest ? "text-foreground" : "text-muted-foreground italic"}`}
+                    >
+                      {savedDest || "Not set"}
                     </p>
                   </div>
                 </div>
@@ -385,8 +344,7 @@ export default function ProfilePage() {
               🚺 Female-Only Feed Active
             </p>
             <p className="text-xs text-muted-foreground">
-              Your ride feed only shows rides posted by female students. Change
-              preference above to see all rides.
+              Your ride feed only shows rides posted by female students.
             </p>
           </div>
         )}

@@ -28,3 +28,13 @@ export interface RideWithBadge {
   seatsLeft: number;
   perPersonFare: number;
 }
+
+// Extended profile type with preferred_destination
+export interface UserProfileExtended {
+  id: string;
+  name: string;
+  hasPhoto: boolean;
+  email: string;
+  gender: import("../backend.d.ts").GenderPreference;
+  preferred_destination?: string;
+}

@@ -1,4 +1,11 @@
 // Version: 1.0.0
+type AuthUser__928875782 =
+  {
+    createdAt : Timestamp__871882639;
+    email : Text;
+    var gender : GenderPreference__928541513;
+    var passwordHash : Text
+  };
 type ChatMessage__738922199 =
   {
     content : Text;
@@ -9,7 +16,7 @@ type ChatMessage__738922199 =
   };
 type Data__791452850<K, V> =
   {var count : Nat__490723111; kvs : [var ?(K, V)]};
-type GenderPreference__928541513 = {#female; #male; #none};
+type GenderPreference__928541513 = {#female; #lgbtq; #male; #none};
 type Internal__8484328<K, V> =
   {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
 type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
@@ -26,16 +33,21 @@ type Nat__490723111 = Nat__920180692;
 type Nat__920180692 = Nat;
 type Node__46230540<K, V> =
   {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type OTPRecord__525348794 =
+  {email : Text; expiresAt : Timestamp__871882639; otp : Text};
 type RideId__497358404 = Nat;
 type RideId__562056371 = RideId__497358404;
 type Ride__1025491552 =
   {
+    var confirmed_users : [UserId__1065081745];
     creator_gender : GenderPreference__928541513;
     creator_id : UserId__1065081745;
     datetime : Timestamp__871882639;
     destination : Text;
+    female_only : Bool;
     id : RideId__562056371;
     var joined_users : [UserId__1065081745];
+    var pending_requests : [UserId__1065081745];
     var seats_filled : Nat;
     seats_total : Nat;
     total_fare : Nat
@@ -51,9 +63,20 @@ type UserProfile__815183166 =
     id : UserId__1065081745;
     var name : Text;
     var photoData : ?[Nat8];
-    var photoMime : ?Text
+    var photoMime : ?Text;
+    var preferred_destination : ?Text
   };
 actor {
+  stable authUsers :
+    {
+      var root : Node__46230540<UserId__1065081745, AuthUser__928875782>;
+      var size : Nat__490723111
+    };
+  stable emailIndex :
+    {
+      var root : Node__46230540<Text, UserId__1065081745>;
+      var size : Nat__490723111
+    };
   stable messages :
     {
       var root :
@@ -63,6 +86,11 @@ actor {
     };
   stable nextMessageId : {var val : Nat};
   stable nextRideId : {var val : Nat};
+  stable otpStore :
+    {
+      var root : Node__46230540<Text, OTPRecord__525348794>;
+      var size : Nat__490723111
+    };
   stable profiles :
     {
       var root : Node__46230540<UserId__1065081745, UserProfile__815183166>;
