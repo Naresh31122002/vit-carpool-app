@@ -1,0 +1,83 @@
+type WithdrawResult = 
+ variant {
+   notJoined;
+   ok;
+   rideNotFound;
+ };
+type UserProfilePublic = 
+ record {
+   email: text;
+   gender: GenderPreference;
+   hasPhoto: bool;
+   id: text;
+   name: text;
+ };
+type Timestamp = int;
+type SaveMessageResult = 
+ variant {
+   notMember;
+   ok: ChatMessagePublic;
+   rideNotFound;
+ };
+type RidePublic = 
+ record {
+   creator_gender: GenderPreference;
+   creator_id: text;
+   datetime: Timestamp;
+   destination: text;
+   id: RideId;
+   joined_users: vec text;
+   seats_filled: nat;
+   seats_total: nat;
+   total_fare: nat;
+ };
+type RideId = nat;
+type MessageId = nat;
+type JoinResult = 
+ variant {
+   err: text;
+   ok: RidePublic;
+ };
+type GenderPreference = 
+ variant {
+   female;
+   male;
+   none;
+ };
+type CreateRideResult = 
+ variant {
+   err: text;
+   ok: RidePublic;
+ };
+type ChatMessagePublic = 
+ record {
+   content: text;
+   id: MessageId;
+   ride_id: RideId;
+   sender_id: text;
+   timestamp: Timestamp;
+ };
+service : {
+  createRide: (destination: text, datetime: Timestamp, total_fare: nat,
+   seats_total: nat) -> (CreateRideResult);
+  getGenderFilteredRides: (gender: opt GenderPreference) ->
+   (vec RidePublic) query;
+  getJoinedRides: () -> (vec RidePublic) query;
+  getMessages: (ride_id: RideId) -> (vec ChatMessagePublic) query;
+  getMyRides: () -> (vec RidePublic) query;
+  getPostedRides: () -> (vec RidePublic) query;
+  getProfile: () -> (opt UserProfilePublic) query;
+  getProfilePhoto: (userId: text) ->
+   (opt record {
+          data: vec nat8;
+          mime: text;
+        }) query;
+  getRideDetails: (ride_id: RideId) -> (opt RidePublic) query;
+  getRides: () -> (vec RidePublic) query;
+  joinRide: (ride_id: RideId) -> (JoinResult);
+  saveMessage: (ride_id: RideId, content: text) -> (SaveMessageResult);
+  setProfile: (name: text, email: text, gender: GenderPreference) ->
+   (UserProfilePublic);
+  setProfilePhoto: (data: vec nat8, mime: text) -> ();
+  withdrawRide: (ride_id: RideId) -> (WithdrawResult);
+}

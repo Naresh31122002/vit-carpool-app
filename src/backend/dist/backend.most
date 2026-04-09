@@ -1,0 +1,77 @@
+// Version: 1.0.0
+type ChatMessage__738922199 =
+  {
+    content : Text;
+    id : MessageId__803855988;
+    ride_id : RideId__562056371;
+    sender_id : UserId__1065081745;
+    timestamp : Timestamp__871882639
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type GenderPreference__928541513 = {#female; #male; #none};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type List__415060402<T> = List__790383201<T>;
+type List__790383201<T> =
+  {
+    var blockIndex : Nat__490723111;
+    var blocks : [var [var ?T]];
+    var elementIndex : Nat__490723111
+  };
+type MessageId__291319400 = Nat;
+type MessageId__803855988 = MessageId__291319400;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type RideId__497358404 = Nat;
+type RideId__562056371 = RideId__497358404;
+type Ride__1025491552 =
+  {
+    creator_gender : GenderPreference__928541513;
+    creator_id : UserId__1065081745;
+    datetime : Timestamp__871882639;
+    destination : Text;
+    id : RideId__562056371;
+    var joined_users : [UserId__1065081745];
+    var seats_filled : Nat;
+    seats_total : Nat;
+    total_fare : Nat
+  };
+type Timestamp__301639476 = Int;
+type Timestamp__871882639 = Timestamp__301639476;
+type UserId__1065081745 = UserId__158757552;
+type UserId__158757552 = Principal;
+type UserProfile__815183166 =
+  {
+    var email : Text;
+    var gender : GenderPreference__928541513;
+    id : UserId__1065081745;
+    var name : Text;
+    var photoData : ?[Nat8];
+    var photoMime : ?Text
+  };
+actor {
+  stable messages :
+    {
+      var root :
+        Node__46230540<RideId__562056371,
+                        List__415060402<ChatMessage__738922199>>;
+      var size : Nat__490723111
+    };
+  stable nextMessageId : {var val : Nat};
+  stable nextRideId : {var val : Nat};
+  stable profiles :
+    {
+      var root : Node__46230540<UserId__1065081745, UserProfile__815183166>;
+      var size : Nat__490723111
+    };
+  stable rides :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Ride__1025491552]];
+      var elementIndex : Nat__490723111
+    }
+};
